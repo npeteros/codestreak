@@ -116,7 +116,7 @@ export function SettingsClient({ settings }: Props) {
   }
 
   function copyLink() {
-    const link = `https://codestreak.app/join/${settings.inviteCode}`;
+    const link = `${process.env.NEXT_PUBLIC_APP_URL}/join/${settings.inviteCode}`;
     navigator.clipboard?.writeText(link).catch(() => {});
     setLinkCopied(true);
     showToast("Invite link copied to clipboard");
@@ -289,7 +289,7 @@ export function SettingsClient({ settings }: Props) {
               className="flex items-center justify-between gap-2.5 bg-code-bg border border-white/10 rounded-[10px] px-[13px] py-[11px] cursor-pointer hover:border-gold/40 transition-colors text-left min-w-0"
             >
               <span className="font-mono text-[13px] text-[#C2C0B9] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
-                codestreak.app/join/{settings.inviteCode}
+                {process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '')}/join/{settings.inviteCode}
               </span>
               <span className="font-mono text-[11px] text-text-muted flex-none">
                 {linkCopied ? "copied!" : "copy"}
