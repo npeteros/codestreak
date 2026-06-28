@@ -1,26 +1,51 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* Brand */
+  --color-gold: #F5C842;
+  --color-bg: #0B0B0D;
+  --color-surface: #141417;
+  --color-sidebar: #0D0D10;
+  --color-code-bg: #0E0E11;
+
+  /* Text */
+  --color-text-primary: #F3F1EA;
+  --color-text-secondary: #B7B5AE;
+  --color-text-muted: #8C8A83;
+  --color-text-faint: #6b6964;
+
+  /* State */
+  --color-risk: #E0795E;
+
+  /* Fonts — CSS vars injected by next/font/google in root layout */
+  --font-serif: var(--font-dm-serif), "DM Serif Display", serif;
+  --font-mono: var(--font-dm-mono), "DM Mono", monospace;
+  --font-sans: var(--font-dm-sans), "DM Sans", system-ui, sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: #0B0B0D;
+  color: #F3F1EA;
+}
+
+::selection {
+  background: rgba(245, 200, 66, 0.28);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #5f5d57;
+}
+
+*::-webkit-scrollbar {
+  height: 9px;
+  width: 9px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 5px;
 }
