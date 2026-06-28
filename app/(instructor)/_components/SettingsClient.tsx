@@ -280,16 +280,16 @@ export function SettingsClient({ settings }: Props) {
               </span>
             </button>
           </div>
-          <div className="flex-[2_1_280px] flex flex-col gap-2">
+          <div className="flex-[2_1_280px] min-w-0 flex flex-col gap-2">
             <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
               INVITE LINK
             </label>
             <button
               onClick={copyLink}
-              className="flex items-center justify-between gap-2.5 bg-code-bg border border-white/10 rounded-[10px] px-[13px] py-[11px] cursor-pointer hover:border-gold/40 transition-colors text-left min-w-0"
+              className="w-full flex items-center justify-between gap-2.5 bg-code-bg border border-white/10 rounded-[10px] px-[13px] py-[11px] cursor-pointer hover:border-gold/40 transition-colors text-left min-w-0 overflow-hidden"
             >
               <span className="font-mono text-[13px] text-[#C2C0B9] whitespace-nowrap overflow-hidden text-ellipsis min-w-0">
-                {process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '')}/join/{settings.inviteCode}
+                {process.env.NEXT_PUBLIC_APP_URL?.replace(/^https?:\/\//, '')}join/{settings.inviteCode}
               </span>
               <span className="font-mono text-[11px] text-text-muted flex-none">
                 {linkCopied ? "copied!" : "copy"}
