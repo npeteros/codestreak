@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Pencil, Archive as ArchiveIcon, Users } from "lucide-react";
 import {
   createProject,
   updateProject,
@@ -52,6 +55,7 @@ export function ProjectsSprintClient({
   const [tasks, setTasks] = useState<SprintTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [formState, setFormState] = useState<ProjectFormState>(null);
+  const [membersPanelId, setMembersPanelId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
@@ -131,48 +135,88 @@ export function ProjectsSprintClient({
       ) : (
         <>
           <div className="flex items-center gap-2 flex-wrap border-b border-white/[0.07] pb-2">
-            {projects.map((p) => (
-              <div key={p.id} className="flex items-center gap-1">
-                <button
-                  onClick={() => setSelectedId(p.id)}
-                  className="px-3 py-[7px] rounded-[8px] font-sans text-[13px] cursor-pointer border-none"
-                  style={
-                    selectedId === p.id
-                      ? { background: "#F5C842", color: "#0B0B0D", fontWeight: 600 }
-                      : { background: "transparent", color: "#8C8A83" }
-                  }
-                >
-                  {p.name}
-                  {p.scope === Scope.Students && (
-                    <span className="ml-1 opacity-70">
-                      (
-                      {p.studentIds
-                        .map((id) => students.find((s) => s.id === id)?.name ?? "student")
-                        .join(", ")}
-                      )
-                    </span>
+            {projects.map((p) => {
+              const isSelected = selectedId === p.id;
+              const iconColorClass = isSelected
+                ? "text-bg/60 hover:text-bg hover:bg-black/10"
+                : "text-text-faint hover:text-text-primary hover:bg-white/10";
+              return (
+                <div key={p.id} className="relative">
+                  <div
+                    className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.25 rounded-lg font-sans text-[13px] cursor-pointer"
+                    style={
+                      isSelected
+                        ? { background: "#F5C842", color: "#0B0B0D", fontWeight: 600 }
+                        : { background: "transparent", color: "#8C8A83" }
+                    }
+                    onClick={() => setSelectedId(p.id)}
+                  >
+                    <span>{p.name}</span>
+                    {p.scope === Scope.Students && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setMembersPanelId(membersPanelId === p.id ? null : p.id);
+                        }}
+                        title="View members"
+                        aria-label="View members"
+                        className={`bg-transparent border-none cursor-pointer p-1 rounded-md flex items-center ${iconColorClass}`}
+                      >
+                        <Users size={13} />
+                      </button>
+                    )}
+                    {isSelected && (
+                      <>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setFormState({ mode: ProjectFormMode.Edit, project: p });
+                          }}
+                          title="Edit project"
+                          aria-label="Edit project"
+                          className={`bg-transparent border-none cursor-pointer p-1 rounded-md flex items-center ${iconColorClass}`}
+                        >
+                          <Pencil size={13} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleArchive(p.id);
+                          }}
+                          title="Archive project"
+                          aria-label="Archive project"
+                          className="bg-transparent border-none cursor-pointer p-1 rounded-md flex items-center text-bg/60 hover:text-red-700 hover:bg-black/10"
+                        >
+                          <ArchiveIcon size={13} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {membersPanelId === p.id && (
+                    <>
+                      <div
+                        className="fixed inset-0 z-10"
+                        onClick={() => setMembersPanelId(null)}
+                      />
+                      <div className="absolute z-20 top-full left-0 mt-1 min-w-[180px] bg-[#17171b] border border-white/10 rounded-[9px] p-2.5 flex flex-col gap-1 shadow-lg">
+                        <p className="text-text-faint text-[11px] font-semibold uppercase tracking-wide m-0 mb-0.5">
+                          Members
+                        </p>
+                        {p.studentIds.length === 0 ? (
+                          <p className="text-text-faint text-[12.5px] m-0">No students assigned</p>
+                        ) : (
+                          p.studentIds.map((id) => (
+                            <p key={id} className="text-text-primary text-[12.5px] m-0">
+                              {students.find((s) => s.id === id)?.name ?? "student"}
+                            </p>
+                          ))
+                        )}
+                      </div>
+                    </>
                   )}
-                </button>
-                {selectedId === p.id && (
-                  <>
-                    <button
-                      onClick={() => setFormState({ mode: ProjectFormMode.Edit, project: p })}
-                      title="Edit project"
-                      className="text-text-faint hover:text-text-primary text-[11px] bg-transparent border-none cursor-pointer px-1"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleArchive(p.id)}
-                      title="Archive project"
-                      className="text-text-faint hover:text-red-400 text-[11px] bg-transparent border-none cursor-pointer px-1"
-                    >
-                      Archive
-                    </button>
-                  </>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
 
           {selected?.description && (
@@ -228,6 +272,7 @@ function ProjectFormModal({
   const [studentIds, setStudentIds] = useState<string[]>(project?.studentIds ?? []);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState(false);
 
   async function handleSubmit() {
     if (!name.trim()) return;
@@ -296,13 +341,32 @@ function ProjectFormModal({
           placeholder="Project name"
           className="bg-code-bg text-text-primary border border-white/10 rounded-[9px] px-[13px] py-[9px] font-sans text-[13.5px] outline-none placeholder:text-text-faint"
         />
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          rows={3}
-          placeholder="Description (optional)"
-          className="bg-code-bg text-text-primary border border-white/10 rounded-[9px] px-[13px] py-[9px] font-sans text-[13.5px] outline-none resize-y placeholder:text-text-faint"
-        />
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] text-text-faint font-mono">
+            Description (Markdown)
+          </span>
+          <button
+            onClick={() => setPreview((p) => !p)}
+            className="text-[11px] text-gold bg-transparent border-none cursor-pointer p-0"
+          >
+            {preview ? "Edit" : "Preview"}
+          </button>
+        </div>
+        {preview ? (
+          <div className="markdown-body text-[13.5px] text-[#C2C0B9] leading-[1.6] min-h-[75px] max-h-[220px] overflow-y-auto bg-code-bg rounded-[9px] p-[13px] border border-white/10">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {description || "*Nothing to preview*"}
+            </ReactMarkdown>
+          </div>
+        ) : (
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="Description (optional) — supports Markdown"
+            className="bg-code-bg text-text-primary border border-white/10 rounded-[9px] px-[13px] py-[9px] font-sans text-[13.5px] outline-none resize-y placeholder:text-text-faint"
+          />
+        )}
         <div className="flex flex-col gap-2">
           <label className="flex items-center gap-2 text-[13.5px] text-text-primary cursor-pointer">
             <input

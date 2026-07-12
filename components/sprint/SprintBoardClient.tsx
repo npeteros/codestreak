@@ -34,6 +34,22 @@ type ModalState =
 
 type Board = Record<SprintTaskStatus, SprintTask[]>;
 
+function formatDueDate(dueDate: string): string {
+  const [y, m, d] = dueDate.split("-").map(Number);
+  const due = new Date(y, m - 1, d);
+  const now = new Date();
+  const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((due.getTime() - todayLocal.getTime()) / 86_400_000);
+
+  if (diffDays === 0) return "today";
+  if (diffDays === 1) return "tomorrow";
+  if (diffDays === -1) return "yesterday";
+  if (diffDays > 1 && diffDays <= 5) return `${diffDays} days from now`;
+  if (diffDays < -1 && diffDays >= -5) return `${Math.abs(diffDays)} days ago`;
+
+  return due.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
 function groupTasks(tasks: SprintTask[]): Board {
   const board: Board = { TODO: [], IN_PROGRESS: [], IN_REVIEW: [], DONE: [] };
   for (const t of [...tasks].sort((a, b) => a.order - b.order)) {
@@ -323,7 +339,7 @@ export function SprintBoardClient({
                             : "1px solid rgba(255,255,255,0.12)",
                         }}
                       >
-                        Due {task.dueDate}
+                        Due {formatDueDate(task.dueDate)}
                       </span>
                     )}
                   </div>
@@ -399,7 +415,7 @@ function TaskDetailModal({
         </div>
         {task.dueDate && (
           <span className="self-start font-mono text-[10.5px] px-[7px] py-[2px] rounded-[5px] text-[#8C8A83] border border-white/[0.12]">
-            Due {task.dueDate}
+            Due {formatDueDate(task.dueDate)}
           </span>
         )}
         <div className="markdown-body text-[13.5px] text-[#C2C0B9] leading-[1.6] max-h-[280px] overflow-y-auto bg-code-bg rounded-[9px] p-[13px] border border-white/10">
