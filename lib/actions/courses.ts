@@ -2,6 +2,7 @@
 
 import { FieldValue } from "firebase-admin/firestore";
 import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import type { UserDoc, CourseDoc } from "@/lib/firebase/types";
 
@@ -63,6 +64,7 @@ export async function createCourse(data: {
     instructorId: uid,
     streakRules: data.streakRules,
     isArchived: false,
+    isPublic: false,
     createdAt: FieldValue.serverTimestamp(),
   });
 
@@ -213,5 +215,123 @@ export async function joinCourse(
     ]);
   }
 
+  return { success: true };
+}
+
+export async function getPublicCourses(): Promise<
+  | {
+      success: true;
+      courses: Array<{
+        id: string;
+        name: string;
+        description: string;
+        languageTag: string;
+        enrolledCount: number;
+      }>;
+    }
+  | { success: false; error: string }
+> {
+  const uid = await getVerifiedStudent();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  const [coursesSnap, hubSnap] = await Promise.all([
+    adminDb
+      .collection("courses")
+      .where("isPublic", "==", true)
+      .where("isArchived", "==", false)
+      .get(),
+    adminDb.collection("students").doc(uid).collection("courses").get(),
+  ]);
+
+  const joinedIds = new Set(hubSnap.docs.map((d) => d.id));
+
+  const docs = coursesSnap.docs
+    .filter((d) => !joinedIds.has(d.id))
+    .sort((a, b) => {
+      const at = (a.data() as CourseDoc).createdAt?.toMillis() ?? 0;
+      const bt = (b.data() as CourseDoc).createdAt?.toMillis() ?? 0;
+      return bt - at;
+    });
+
+  const courses = await Promise.all(
+    docs.map(async (doc) => {
+      const data = doc.data() as CourseDoc;
+      const enrollmentsSnap = await adminDb
+        .collection("courses")
+        .doc(doc.id)
+        .collection("enrollments")
+        .get();
+      return {
+        id: doc.id,
+        name: data.name,
+        description: data.description,
+        languageTag: data.languageTag,
+        enrolledCount: enrollmentsSnap.size,
+      };
+    })
+  );
+
+  return { success: true, courses };
+}
+
+export async function joinPublicCourse(
+  courseId: string
+): Promise<{ success: boolean; error?: string }> {
+  const uid = await getVerifiedStudent();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  const snap = await adminDb.collection("courses").doc(courseId).get();
+  if (!snap.exists) return { success: false, error: "not_found" };
+
+  const data = snap.data() as CourseDoc;
+  if (!data.isPublic) return { success: false, error: "not_public" };
+
+  const enrollSnap = await adminDb
+    .collection("courses")
+    .doc(courseId)
+    .collection("enrollments")
+    .doc(uid)
+    .get();
+
+  if (!enrollSnap.exists) {
+    await Promise.all([
+      enrollStudent(courseId, uid),
+      adminDb
+        .collection("students")
+        .doc(uid)
+        .collection("courses")
+        .doc(courseId)
+        .set({
+          courseId,
+          courseName: data.name,
+          timezone: data.timezone,
+          joinedAt: FieldValue.serverTimestamp(),
+        }),
+    ]);
+  }
+
+  revalidatePath("/courses");
+  return { success: true };
+}
+
+export async function leaveCourse(
+  courseId: string
+): Promise<{ success: boolean; error?: string }> {
+  const uid = await getVerifiedStudent();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  await Promise.all([
+    adminDb
+      .collection("courses")
+      .doc(courseId)
+      .collection("enrollments")
+      .doc(uid)
+      .delete(),
+    adminDb.recursiveDelete(
+      adminDb.collection("students").doc(uid).collection("courses").doc(courseId)
+    ),
+  ]);
+
+  revalidatePath("/courses");
   return { success: true };
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { LayoutGrid, Zap, CircleCheck, BarChart3, BookOpen } from "lucide-react";
+import { LayoutGrid, Zap, CircleCheck, BarChart3, BookOpen, Compass } from "lucide-react";
 
 type NavItem = {
   path: string;
@@ -14,6 +14,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { path: "/dashboard/student", label: "Overview", icon: LayoutGrid, exact: true },
+  { path: "/courses", label: "Browse Courses", icon: Compass, exact: true },
   { path: "/dashboard/student/challenge", label: "Daily Challenge", icon: Zap },
   { path: "/dashboard/student/checkin", label: "Check-in", icon: CircleCheck },
   { path: "/dashboard/student/sprint", label: "Sprint Board", icon: BarChart3 },

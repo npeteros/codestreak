@@ -7,6 +7,7 @@ import { BookOpen, Plus, ChevronRight } from "lucide-react";
 
 const LANGUAGES = ["Python", "JavaScript", "TypeScript", "Java", "C", "Go", "Rust"];
 const TIMEZONES = [
+  "Asia/Manila",
   "America/New_York",
   "America/Chicago",
   "America/Denver",
@@ -14,7 +15,6 @@ const TIMEZONES = [
   "Europe/London",
   "Europe/Paris",
   "Asia/Tokyo",
-  "Asia/Manila",
   "Asia/Singapore",
   "Australia/Sydney",
   "UTC",

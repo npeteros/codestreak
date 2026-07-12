@@ -1,6 +1,7 @@
 "use server";
 
 import { cookies } from "next/headers";
+import { revalidatePath } from "next/cache";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import type {
@@ -85,6 +86,7 @@ export type CourseSettings = {
   inviteCode: string;
   streakRules: { challenge: boolean; checkin: boolean; sprintCard: boolean };
   isArchived: boolean;
+  isPublic: boolean;
 };
 
 export type AiChallengeDraft = {
@@ -824,6 +826,7 @@ export async function getSettings(courseId: string): Promise<
       inviteCode: course.data.inviteCode,
       streakRules: course.data.streakRules,
       isArchived: course.data.isArchived,
+      isPublic: course.data.isPublic ?? false,
     },
   };
 }
@@ -877,6 +880,22 @@ export async function updateStreakRules(
   return { success: true };
 }
 
+export async function setCourseVisibility(
+  courseId: string,
+  isPublic: boolean
+): Promise<{ success: boolean; isPublic?: boolean; error?: string }> {
+  const uid = await verifyInstructor();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  const course = await getCourse(uid, courseId);
+  if (!course) return { success: false, error: "no_course" };
+
+  await adminDb.collection("courses").doc(course.id).update({ isPublic });
+
+  revalidatePath("/courses");
+  return { success: true, isPublic };
+}
+
 export async function toggleCourseArchive(courseId: string): Promise<{
   success: boolean;
   isArchived?: boolean;
@@ -891,6 +910,7 @@ export async function toggleCourseArchive(courseId: string): Promise<{
   const next = !course.data.isArchived;
   await adminDb.collection("courses").doc(course.id).update({ isArchived: next });
 
+  revalidatePath("/courses");
   return { success: true, isArchived: next };
 }
 
@@ -919,6 +939,7 @@ export async function deleteCourse(
 
   await adminDb.recursiveDelete(adminDb.collection("courses").doc(courseId));
 
+  revalidatePath("/courses");
   return { success: true };
 }
 

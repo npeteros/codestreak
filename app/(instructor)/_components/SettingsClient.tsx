@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   updateCourseSettings,
   updateStreakRules,
+  setCourseVisibility,
   toggleCourseArchive,
   deleteCourse,
 } from "@/lib/actions/instructor";
@@ -13,6 +14,7 @@ import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 const LANGUAGES = ["Python", "JavaScript", "Java", "C", "Go", "Rust", "TypeScript"];
 const TIMEZONES = [
+  "Asia/Manila",
   "America/New_York",
   "America/Chicago",
   "America/Denver",
@@ -20,7 +22,6 @@ const TIMEZONES = [
   "Europe/London",
   "Europe/Paris",
   "Asia/Tokyo",
-  "Asia/Manila",
   "Asia/Singapore",
   "Australia/Sydney",
   "UTC",
@@ -76,6 +77,7 @@ export function SettingsClient({ settings }: Props) {
   const [language, setLanguage] = useState(settings.languageTag);
   const [timezone, setTimezone] = useState(settings.timezone);
   const [rules, setRules] = useState(settings.streakRules);
+  const [isPublic, setIsPublic] = useState(settings.isPublic);
   const [codeCopied, setCodeCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -104,6 +106,19 @@ export function SettingsClient({ settings }: Props) {
       if (!res.success) {
         setRules(rules); // revert
         showToast("Failed to update rules");
+      }
+    });
+  }
+
+  function handleToggleVisibility() {
+    const next = !isPublic;
+    setIsPublic(next);
+    startTransition(async () => {
+      const res = await setCourseVisibility(settings.courseId, next);
+      if (res.success) showToast(next ? "Course is now public" : "Course is now private");
+      else {
+        setIsPublic(isPublic); // revert
+        showToast("Failed to update visibility");
       }
     });
   }
@@ -255,6 +270,28 @@ export function SettingsClient({ settings }: Props) {
           >
             {isPending ? "Saving…" : "Save changes"}
           </button>
+        </div>
+      </section>
+
+      {/* Visibility section */}
+      <section className="bg-surface border border-white/[0.07] rounded-[15px] px-[22px] py-[22px] flex flex-col gap-2">
+        <span className="font-mono text-[11px] tracking-[.12em] text-text-muted mb-1.5">
+          VISIBILITY
+        </span>
+        <div className="flex items-center justify-between gap-3.5">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-[14px] text-[#E4E2DB] font-medium">
+              Public course
+            </span>
+            <span className="text-[12.5px] text-text-muted">
+              Listed on students&rsquo; Browse Courses page so anyone can find and join.
+            </span>
+          </div>
+          <Toggle
+            checked={isPublic}
+            onChange={handleToggleVisibility}
+            disabled={isPending}
+          />
         </div>
       </section>
 

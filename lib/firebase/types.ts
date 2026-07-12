@@ -30,6 +30,7 @@ export interface CourseDoc {
   instructorId: string;
   streakRules: StreakRules;
   isArchived: boolean;
+  isPublic: boolean;
   createdAt: Timestamp;
 }
 
