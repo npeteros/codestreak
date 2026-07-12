@@ -1,9 +1,6 @@
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
-import { adminAuth } from "@/lib/firebase/admin";
+import { getSettings } from "@/lib/actions/instructor";
 import { ChallengesClient } from "@/app/(instructor)/_components/ChallengesClient";
-
-const COOKIE = "codestreak_session";
 
 export default async function InstructorChallengesPage({
   params,
@@ -12,17 +9,28 @@ export default async function InstructorChallengesPage({
 }) {
   const { courseId } = await params;
 
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE);
-  if (!session?.value) redirect("/login");
-
-  try {
-    await adminAuth.verifySessionCookie(session.value, true);
-  } catch {
-    redirect("/login");
+  const result = await getSettings(courseId);
+  if (!result.success) {
+    if (result.error === "unauthenticated") redirect("/login");
+    return (
+      <div className="flex flex-col gap-3 py-14 text-center">
+        <p className="font-serif text-[2rem] text-text-primary font-normal">
+          No course found
+        </p>
+        <p className="text-sm text-text-faint">
+          Contact support to create your course.
+        </p>
+      </div>
+    );
   }
 
   const today = new Date().toISOString().slice(0, 10);
 
-  return <ChallengesClient courseId={courseId} defaultDate={today} />;
+  return (
+    <ChallengesClient
+      courseId={courseId}
+      defaultDate={today}
+      languageTag={result.settings.languageTag}
+    />
+  );
 }

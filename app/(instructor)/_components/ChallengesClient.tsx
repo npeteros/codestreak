@@ -16,18 +16,61 @@ const DIFF_LABELS: Record<Difficulty, string> = {
   HARD: "Hard",
 };
 
+const LANGUAGE_META: Record<string, { ext: string; label: string; starter: string }> = {
+  python: {
+    ext: "py",
+    label: "Python 3",
+    starter: "def solution(s: str):\n    # starter code\n    pass\n",
+  },
+  javascript: {
+    ext: "js",
+    label: "JavaScript",
+    starter: "function solution(s) {\n  // starter code\n}\n",
+  },
+  typescript: {
+    ext: "ts",
+    label: "TypeScript",
+    starter: "function solution(s: string) {\n  // starter code\n}\n",
+  },
+  java: {
+    ext: "java",
+    label: "Java",
+    starter:
+      "class Solution {\n    static Object solution(String s) {\n        // starter code\n        return null;\n    }\n}\n",
+  },
+  c: {
+    ext: "c",
+    label: "C",
+    starter: "#include <stdio.h>\n\nvoid solution(char *s) {\n    // starter code\n}\n",
+  },
+  go: {
+    ext: "go",
+    label: "Go",
+    starter: "package main\n\nfunc solution(s string) {\n\t// starter code\n}\n",
+  },
+  rust: {
+    ext: "rs",
+    label: "Rust",
+    starter: "fn solution(s: &str) {\n    // starter code\n}\n",
+  },
+};
+
+function languageMeta(languageTag: string) {
+  return LANGUAGE_META[languageTag.trim().toLowerCase()] ?? LANGUAGE_META.python;
+}
+
 interface Props {
   courseId: string;
   defaultDate: string;
+  languageTag: string;
 }
 
-export function ChallengesClient({ courseId, defaultDate }: Props) {
+export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) {
+  const lang = languageMeta(languageTag);
   const [mode, setMode] = useState<Mode>("manual");
   const [difficulty, setDifficulty] = useState<Difficulty>("MEDIUM");
   const [prompt, setPrompt] = useState("");
-  const [starterCode, setStarterCode] = useState(
-    "def solution(s: str):\n    # starter code\n    pass\n"
-  );
+  const [starterCode, setStarterCode] = useState(lang.starter);
   const [topicTag, setTopicTag] = useState("");
   const [schedDate, setSchedDate] = useState(defaultDate);
   const [aiTopic, setAiTopic] = useState("");
@@ -250,11 +293,11 @@ export function ChallengesClient({ courseId, defaultDate }: Props) {
               <div className="flex items-center gap-2.5">
                 <span className="w-[9px] h-[9px] rounded-full bg-gold inline-block" />
                 <span className="font-mono text-[12.5px] text-[#D7D5CE]">
-                  starter.py
+                  starter.{lang.ext}
                 </span>
               </div>
               <span className="font-mono text-[11px] text-text-muted border border-white/10 rounded-[6px] px-2 py-[3px]">
-                Python 3
+                {lang.label}
               </span>
             </div>
             <textarea
