@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { CheckCircle2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { submitChallenge } from "@/lib/actions/challenges";
 
 interface Challenge {
@@ -17,6 +19,7 @@ interface Props {
   courseId: string;
   challenge: Challenge | null;
   alreadySubmitted: boolean;
+  submittedCode: string | null;
 }
 
 const DIFFICULTY_LABEL: Record<string, string> = {
@@ -31,8 +34,18 @@ const DIFFICULTY_COLORS: Record<string, string> = {
   HARD: "text-red-400 border-red-400/40",
 };
 
-export function ChallengeClient({ courseId, challenge, alreadySubmitted }: Props) {
-  const [code, setCode] = useState(challenge?.starterCode ?? "");
+export function ChallengeClient({
+  courseId,
+  challenge,
+  alreadySubmitted,
+  submittedCode,
+}: Props) {
+  const [code, setCode] = useState(
+    submittedCode ?? challenge?.starterCode ?? ""
+  );
+  const [savedCode, setSavedCode] = useState(
+    submittedCode ?? challenge?.starterCode ?? ""
+  );
   const [submitted, setSubmitted] = useState(alreadySubmitted);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,18 +71,15 @@ export function ChallengeClient({ courseId, challenge, alreadySubmitted }: Props
   }
 
   async function handleSubmit() {
-    if (submitted || submitting) return;
+    if (submitting || (submitted && code === savedCode)) return;
     setSubmitting(true);
     setError(null);
     const result = await submitChallenge(courseId, challenge!.id, code);
     if (result.success) {
       setSubmitted(true);
+      setSavedCode(code);
     } else {
-      setError(
-        result.error === "already_submitted"
-          ? "You've already submitted today."
-          : "Something went wrong. Try again."
-      );
+      setError("Something went wrong. Try again.");
     }
     setSubmitting(false);
   }
@@ -105,9 +115,13 @@ export function ChallengeClient({ courseId, challenge, alreadySubmitted }: Props
             {challenge.title}
           </h2>
 
-          <p className="text-[14.5px] text-[#C2C0B9] leading-[1.7] m-0 whitespace-pre-wrap">
-            {challenge.description}
-          </p>
+          <div className="max-h-90 overflow-y-auto pr-1 -mr-1">
+            <div className="markdown-body text-[14.5px] text-[#C2C0B9] leading-[1.7]">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {challenge.description}
+              </ReactMarkdown>
+            </div>
+          </div>
         </div>
 
         {/* Editor */}
@@ -126,44 +140,53 @@ export function ChallengeClient({ courseId, challenge, alreadySubmitted }: Props
           <textarea
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            disabled={submitted}
             spellCheck={false}
-            className="flex-1 min-h-[230px] w-full resize-y border-none outline-none bg-code-bg text-[#EDEBE4] font-mono text-[13px] leading-[1.75] px-[18px] py-[16px] disabled:opacity-60"
+            className="flex-1 min-h-[230px] w-full resize-y border-none outline-none bg-code-bg text-[#EDEBE4] font-mono text-[13px] leading-[1.75] px-[18px] py-[16px]"
           />
 
           {/* Footer */}
           <div className="flex items-center justify-between gap-3 px-[15px] py-[13px] border-t border-white/[0.07] bg-[#131316] flex-wrap">
             {!submitted ? (
-              <>
-                <span className="font-mono text-[11.5px] text-text-faint">
-                  {error ?? "Submitting logs today to your streak."}
-                </span>
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="bg-gold text-bg border-none rounded-[9px] px-5 py-[10px] font-sans text-[13.5px] font-semibold cursor-pointer hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {submitting ? "Submitting…" : "Submit solution"}
-                </button>
-              </>
+              <span className="font-mono text-[11.5px] text-text-faint">
+                {error ?? "Submitting logs today to your streak."}
+              </span>
             ) : (
-              <>
-                <div className="flex items-center gap-[10px]">
-                  <span className="w-[22px] h-[22px] rounded-full bg-gold text-bg inline-flex items-center justify-center shrink-0">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                  </span>
-                  <span className="text-[13px] text-[#D7D5CE]">
-                    Logged — <strong className="text-gold">Streak extended!</strong>
-                  </span>
-                </div>
+              <div className="flex items-center gap-[10px]">
+                <span className="w-[22px] h-[22px] rounded-full bg-gold text-bg inline-flex items-center justify-center shrink-0">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </span>
+                <span className="text-[13px] text-[#D7D5CE]">
+                  {error ?? (
+                    <>
+                      Logged — <strong className="text-gold">Streak extended!</strong>
+                    </>
+                  )}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center gap-[10px]">
+              {submitted && (
                 <a
                   href={`/dashboard/student/journal?courseId=${courseId}`}
                   className="text-gold border border-gold/40 rounded-[9px] px-4 py-[9px] font-sans text-[13px] font-semibold cursor-pointer hover:bg-gold/10 transition-colors no-underline"
                 >
                   View AI reflection →
                 </a>
-              </>
-            )}
+              )}
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || (submitted && code === savedCode)}
+                className="bg-gold text-bg border-none rounded-[9px] px-5 py-[10px] font-sans text-[13.5px] font-semibold cursor-pointer hover:brightness-110 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {submitting
+                  ? submitted
+                    ? "Saving…"
+                    : "Submitting…"
+                  : submitted
+                    ? "Save changes"
+                    : "Submit solution"}
+              </button>
+            </div>
           </div>
         </div>
       </div>

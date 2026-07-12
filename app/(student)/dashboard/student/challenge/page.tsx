@@ -72,6 +72,7 @@ export default async function StudentChallengePage({
       courseId={courseId}
       challenge={result.challenge ?? null}
       alreadySubmitted={result.alreadySubmitted}
+      submittedCode={result.submittedCode ?? null}
     />
   );
 }

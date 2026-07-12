@@ -3,7 +3,12 @@
 import { cookies } from "next/headers";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import type { CourseDoc, ChallengeDoc, ChallengeDifficulty } from "@/lib/firebase/types";
+import type {
+  CourseDoc,
+  ChallengeDoc,
+  ChallengeDifficulty,
+  ChallengeSubmissionDoc,
+} from "@/lib/firebase/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
 import { triggerJournalEntry } from "@/lib/actions/journal";
 
@@ -82,7 +87,12 @@ export async function getTodayChallenge(courseId: string) {
     .get();
 
   if (challengeSnap.empty) {
-    return { success: true as const, challenge: null, alreadySubmitted: false };
+    return {
+      success: true as const,
+      challenge: null,
+      alreadySubmitted: false,
+      submittedCode: null,
+    };
   }
 
   const doc = challengeSnap.docs[0];
@@ -98,6 +108,10 @@ export async function getTodayChallenge(courseId: string) {
     .limit(1)
     .get();
 
+  const submission = submissionSnap.docs[0]?.data() as
+    | ChallengeSubmissionDoc
+    | undefined;
+
   return {
     success: true as const,
     challenge: {
@@ -109,6 +123,7 @@ export async function getTodayChallenge(courseId: string) {
       starterCode: data.starterCode,
     },
     alreadySubmitted: !submissionSnap.empty,
+    submittedCode: submission?.code ?? null,
   };
 }
 
@@ -130,8 +145,10 @@ export async function submitChallenge(
     .limit(1)
     .get();
 
-  if (!existing.empty)
-    return { success: false as const, error: "already_submitted" as const };
+  if (!existing.empty) {
+    await existing.docs[0].ref.update({ code });
+    return { success: true as const };
+  }
 
   await adminDb
     .collection("students")
