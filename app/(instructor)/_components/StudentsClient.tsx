@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { getStudentDetail, nudgeStudent } from "@/lib/actions/instructor";
 import type { StudentRow, StudentDetail } from "@/lib/actions/instructor";
+import { difficultyBadgeClass, formatShortDate } from "@/lib/format";
 
 type SortKey = "name" | "streak" | "lastDays" | "challenges" | "checkins";
 type SortDir = "asc" | "desc";
@@ -60,13 +62,16 @@ const TRIGGER_LABEL: Record<string, string> = {
 };
 
 interface DrawerProps {
+  courseId: string;
   student: StudentDetail;
   onClose: () => void;
   onNudge: (id: string, name: string) => void;
   nudging: string | null;
 }
 
-function StudentDrawer({ student, onClose, onNudge, nudging }: DrawerProps) {
+function StudentDrawer({ courseId, student, onClose, onNudge, nudging }: DrawerProps) {
+  const [openSubmissionId, setOpenSubmissionId] = useState<string | null>(null);
+
   return (
     <div
       className="fixed inset-0 z-40 flex justify-end"
@@ -195,6 +200,94 @@ function StudentDrawer({ student, onClose, onNudge, nudging }: DrawerProps) {
                 </div>
                 <div className="text-[13.5px] text-[#C2C0B9] leading-[1.6] italic">
                   {e.content}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Previous challenge submissions */}
+        {student.challengeSubmissions.length > 0 && (
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-[11px] tracking-[.12em] text-text-muted">
+                PREVIOUS SUBMISSIONS
+              </span>
+              {student.challenges > student.challengeSubmissions.length && (
+                <Link
+                  href={`/dashboard/instructor/${courseId}/students/${student.id}/submissions`}
+                  className="font-mono text-[11px] text-gold hover:text-gold/80 transition-colors"
+                >
+                  See all →
+                </Link>
+              )}
+            </div>
+            {student.challengeSubmissions.map((s) => {
+              const open = openSubmissionId === s.id;
+              return (
+                <div
+                  key={s.id}
+                  className="bg-surface border border-white/[0.06] rounded-[12px] px-4 py-[14px] flex flex-col gap-[7px] cursor-pointer"
+                  onClick={() => setOpenSubmissionId(open ? null : s.id)}
+                >
+                  <div className="flex items-center justify-between gap-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={[
+                          "font-mono text-[10px] tracking-[.06em] px-1.5 py-0.5 rounded-[5px] flex-none",
+                          difficultyBadgeClass(s.difficulty),
+                        ].join(" ")}
+                      >
+                        {s.difficulty}
+                      </span>
+                      <span className="text-[13.5px] text-[#E4E2DB] font-medium truncate">
+                        {s.challengeTitle}
+                      </span>
+                    </div>
+                    <span className="font-mono text-[11px] text-text-faint flex-none">
+                      {formatShortDate(s.submittedAt)}
+                    </span>
+                  </div>
+                  {open && (
+                    <pre
+                      className="text-[12px] text-[#C2C0B9] leading-[1.55] whitespace-pre-wrap break-words font-mono bg-black/20 rounded-[8px] p-3 mt-1 max-h-[260px] overflow-y-auto"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {s.code}
+                    </pre>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Check-in history */}
+        {student.checkIns.length > 0 && (
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-mono text-[11px] tracking-[.12em] text-text-muted">
+                CHECK-IN HISTORY
+              </span>
+              {student.checkInsTotal > student.checkIns.length && (
+                <Link
+                  href={`/dashboard/instructor/${courseId}/students/${student.id}/checkins`}
+                  className="font-mono text-[11px] text-gold hover:text-gold/80 transition-colors"
+                >
+                  See all →
+                </Link>
+              )}
+            </div>
+            {student.checkIns.map((c) => (
+              <div
+                key={c.id}
+                className="bg-surface border border-white/[0.06] rounded-[12px] px-4 py-[14px] flex flex-col gap-[7px]"
+              >
+                <span className="font-mono text-[11px] text-text-faint">
+                  {formatShortDate(c.createdAt)}
+                </span>
+                <div className="text-[13.5px] text-[#C2C0B9] leading-[1.6]">
+                  {c.note}
                 </div>
               </div>
             ))}
@@ -404,6 +497,7 @@ export function StudentsClient({ courseId, initialRows }: Props) {
       {/* Student drawer */}
       {selected && (
         <StudentDrawer
+          courseId={courseId}
           student={selected}
           onClose={() => setSelected(null)}
           onNudge={handleNudge}

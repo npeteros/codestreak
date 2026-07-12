@@ -11,12 +11,17 @@ import type {
   StreakEntryDoc,
   SprintCardDoc,
   JournalEntryDoc,
+  ChallengeDoc,
+  ChallengeSubmissionDoc,
+  CheckInDoc,
 } from "@/lib/firebase/types";
 import OpenAI from "openai";
 
 const COOKIE = "codestreak_session";
 const AT_RISK_DAYS = 3;
 const HEATMAP_WEEKS = 26;
+const DRAWER_RECENT_LIMIT = 5;
+const HISTORY_PAGE_SIZE = 20;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,6 +67,35 @@ export type StudentDetail = {
     triggerType: string;
     createdAt: string;
   }>;
+  challengeSubmissions: Array<{
+    id: string;
+    challengeId: string;
+    challengeTitle: string;
+    difficulty: string;
+    code: string;
+    submittedAt: string;
+  }>;
+  checkIns: Array<{
+    id: string;
+    note: string;
+    createdAt: string;
+  }>;
+  checkInsTotal: number;
+};
+
+export type SubmissionHistoryItem = {
+  id: string;
+  challengeId: string;
+  challengeTitle: string;
+  difficulty: string;
+  code: string;
+  submittedAt: string;
+};
+
+export type CheckInHistoryItem = {
+  id: string;
+  note: string;
+  createdAt: string;
 };
 
 export type MilestoneData = {
@@ -129,6 +163,30 @@ async function getCourse(
   const data = snap.data() as CourseDoc;
   if (data.instructorId !== uid) return null;
   return { id: courseId, data };
+}
+
+async function verifyStudentAccess(
+  courseId: string,
+  studentId: string
+): Promise<
+  | { ok: true; uid: string; course: { id: string; data: CourseDoc } }
+  | { ok: false; error: string }
+> {
+  const uid = await verifyInstructor();
+  if (!uid) return { ok: false, error: "unauthenticated" };
+
+  const course = await getCourse(uid, courseId);
+  if (!course) return { ok: false, error: "no_course" };
+
+  const enrollmentSnap = await adminDb
+    .collection("courses")
+    .doc(course.id)
+    .collection("enrollments")
+    .doc(studentId)
+    .get();
+  if (!enrollmentSnap.exists) return { ok: false, error: "not_enrolled" };
+
+  return { ok: true, uid, course };
 }
 
 export async function getInstructorCourses(): Promise<
@@ -493,22 +551,34 @@ export async function getStudentDetail(
 ): Promise<
   { success: true; student: StudentDetail } | { success: false; error: string }
 > {
-  const uid = await verifyInstructor();
-  if (!uid) return { success: false, error: "unauthenticated" };
+  const access = await verifyStudentAccess(courseId, studentId);
+  if (!access.ok) return { success: false, error: access.error };
+  const { course } = access;
 
-  const course = await getCourse(uid, courseId);
-  if (!course) return { success: false, error: "no_course" };
-
-  const enrollmentSnap = await adminDb
+  const submissionsRef = adminDb
+    .collection("students")
+    .doc(studentId)
     .collection("courses")
     .doc(course.id)
-    .collection("enrollments")
+    .collection("challengeSubmissions");
+  const checkInsRef = adminDb
+    .collection("students")
     .doc(studentId)
-    .get();
-  if (!enrollmentSnap.exists) return { success: false, error: "not_enrolled" };
+    .collection("courses")
+    .doc(course.id)
+    .collection("checkIns");
 
-  const [userSnap, streakSnap, sprintSnap, journalSnap, challengeSnap] =
-    await Promise.all([
+  const [
+    userSnap,
+    streakSnap,
+    sprintSnap,
+    journalSnap,
+    challengeSnap,
+    challengeCountSnap,
+    checkInSnap,
+    checkInCountSnap,
+    courseChallengesSnap,
+  ] = await Promise.all([
       adminDb.collection("users").doc(studentId).get(),
       adminDb
         .collection("students")
@@ -535,13 +605,11 @@ export async function getStudentDetail(
         .orderBy("createdAt", "desc")
         .limit(3)
         .get(),
-      adminDb
-        .collection("students")
-        .doc(studentId)
-        .collection("courses")
-        .doc(course.id)
-        .collection("challengeSubmissions")
-        .get(),
+      submissionsRef.orderBy("submittedAt", "desc").limit(DRAWER_RECENT_LIMIT).get(),
+      submissionsRef.count().get(),
+      checkInsRef.orderBy("createdAt", "desc").limit(DRAWER_RECENT_LIMIT).get(),
+      checkInsRef.count().get(),
+      adminDb.collection("courses").doc(course.id).collection("challenges").get(),
     ]);
 
   const name = userSnap.exists
@@ -574,6 +642,32 @@ export async function getStudentDetail(
     };
   });
 
+  const challengeInfo = new Map<string, ChallengeDoc>();
+  for (const doc of courseChallengesSnap.docs)
+    challengeInfo.set(doc.id, doc.data() as ChallengeDoc);
+
+  const challengeSubmissions = challengeSnap.docs.map((doc) => {
+    const d = doc.data() as ChallengeSubmissionDoc;
+    const challenge = challengeInfo.get(d.challengeId);
+    return {
+      id: doc.id,
+      challengeId: d.challengeId,
+      challengeTitle: challenge?.title ?? "Deleted challenge",
+      difficulty: challenge?.difficulty ?? "MEDIUM",
+      code: d.code,
+      submittedAt: (d.submittedAt?.toDate() ?? new Date()).toISOString(),
+    };
+  });
+
+  const checkIns = checkInSnap.docs.map((doc) => {
+    const d = doc.data() as CheckInDoc;
+    return {
+      id: doc.id,
+      note: d.note,
+      createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
+    };
+  });
+
   return {
     success: true,
     student: {
@@ -581,13 +675,129 @@ export async function getStudentDetail(
       name,
       initials: initials(name),
       streak,
-      challenges: challengeSnap.size,
+      challenges: challengeCountSnap.data().count,
       lastDays: days,
       isAtRisk: days >= AT_RISK_DAYS,
       heatmap,
       sprintSnapshot: { todo, inProgress, done },
       recentJournal,
+      challengeSubmissions,
+      checkIns,
+      checkInsTotal: checkInCountSnap.data().count,
     },
+  };
+}
+
+export async function getStudentSubmissionHistory(
+  courseId: string,
+  studentId: string,
+  cursor: string | null = null
+): Promise<
+  | {
+      success: true;
+      studentName: string;
+      items: SubmissionHistoryItem[];
+      nextCursor: string | null;
+    }
+  | { success: false; error: string }
+> {
+  const access = await verifyStudentAccess(courseId, studentId);
+  if (!access.ok) return { success: false, error: access.error };
+  const { course } = access;
+
+  const [userSnap, courseChallengesSnap] = await Promise.all([
+    adminDb.collection("users").doc(studentId).get(),
+    adminDb.collection("courses").doc(course.id).collection("challenges").get(),
+  ]);
+  const studentName = userSnap.exists ? (userSnap.data() as UserDoc).name : "Unknown";
+
+  const challengeInfo = new Map<string, ChallengeDoc>();
+  for (const doc of courseChallengesSnap.docs)
+    challengeInfo.set(doc.id, doc.data() as ChallengeDoc);
+
+  let query = adminDb
+    .collection("students")
+    .doc(studentId)
+    .collection("courses")
+    .doc(course.id)
+    .collection("challengeSubmissions")
+    .orderBy("submittedAt", "desc")
+    .limit(HISTORY_PAGE_SIZE + 1);
+  if (cursor) query = query.startAfter(Timestamp.fromDate(new Date(cursor)));
+
+  const snap = await query.get();
+  const hasMore = snap.docs.length > HISTORY_PAGE_SIZE;
+  const docs = hasMore ? snap.docs.slice(0, HISTORY_PAGE_SIZE) : snap.docs;
+
+  const items = docs.map((doc) => {
+    const d = doc.data() as ChallengeSubmissionDoc;
+    const challenge = challengeInfo.get(d.challengeId);
+    return {
+      id: doc.id,
+      challengeId: d.challengeId,
+      challengeTitle: challenge?.title ?? "Deleted challenge",
+      difficulty: challenge?.difficulty ?? "MEDIUM",
+      code: d.code,
+      submittedAt: (d.submittedAt?.toDate() ?? new Date()).toISOString(),
+    };
+  });
+
+  return {
+    success: true,
+    studentName,
+    items,
+    nextCursor: hasMore ? items[items.length - 1].submittedAt : null,
+  };
+}
+
+export async function getStudentCheckInHistory(
+  courseId: string,
+  studentId: string,
+  cursor: string | null = null
+): Promise<
+  | {
+      success: true;
+      studentName: string;
+      items: CheckInHistoryItem[];
+      nextCursor: string | null;
+    }
+  | { success: false; error: string }
+> {
+  const access = await verifyStudentAccess(courseId, studentId);
+  if (!access.ok) return { success: false, error: access.error };
+  const { course } = access;
+
+  const userSnap = await adminDb.collection("users").doc(studentId).get();
+  const studentName = userSnap.exists ? (userSnap.data() as UserDoc).name : "Unknown";
+
+  let query = adminDb
+    .collection("students")
+    .doc(studentId)
+    .collection("courses")
+    .doc(course.id)
+    .collection("checkIns")
+    .orderBy("createdAt", "desc")
+    .limit(HISTORY_PAGE_SIZE + 1);
+  if (cursor) query = query.startAfter(Timestamp.fromDate(new Date(cursor)));
+
+  const snap = await query.get();
+  const hasMore = snap.docs.length > HISTORY_PAGE_SIZE;
+  const docs = hasMore ? snap.docs.slice(0, HISTORY_PAGE_SIZE) : snap.docs;
+
+  const items = docs.map((doc) => {
+    const d = doc.data() as CheckInDoc;
+    return {
+      id: doc.id,
+      note: d.note,
+      createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
+    };
+  });
+
+  return {
+    success: true,
+    studentName,
+    items,
+    nextCursor: hasMore ? items[items.length - 1].createdAt : null,
   };
 }
 
