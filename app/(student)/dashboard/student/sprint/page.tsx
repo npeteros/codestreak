@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import { getSprintCards } from "@/lib/actions/sprint";
+import { listProjectsForStudent } from "@/lib/actions/projects";
 import { SprintClient } from "./SprintClient";
 
 const COOKIE_NAME = "codestreak_session";
@@ -52,8 +52,8 @@ export default async function StudentSprintPage({
     );
   }
 
-  const result = await getSprintCards(courseId);
-  const cards = result.success ? result.cards : [];
+  const result = await listProjectsForStudent(courseId);
+  const projects = result.success ? result.projects : [];
 
-  return <SprintClient courseId={courseId} initialCards={cards} />;
+  return <SprintClient courseId={courseId} currentUserId={uid} initialProjects={projects} />;
 }

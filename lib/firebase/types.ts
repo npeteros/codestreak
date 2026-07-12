@@ -97,6 +97,35 @@ export interface SprintCardDoc {
   movedAt: Timestamp;
 }
 
+export type ProjectScope = "ALL_STUDENTS" | "STUDENTS";
+
+// /courses/{courseId}/projects/{projectId}
+export interface ProjectDoc {
+  courseId: string;
+  name: string;
+  description?: string;
+  scope: ProjectScope;
+  studentIds?: string[]; // set iff scope === "STUDENTS"
+  isArchived: boolean;
+  createdBy: string; // instructor uid
+  createdAt: Timestamp;
+}
+
+export type SprintTaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
+
+// /courses/{courseId}/projects/{projectId}/tasks/{taskId}
+export interface SprintTaskDoc {
+  title: string;
+  description: string; // markdown source
+  dueDate: Timestamp | null;
+  status: SprintTaskStatus;
+  order: number; // fractional-indexed position within its status column
+  createdBy: string;
+  createdByRole: UserRole;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 // /students/{uid}/courses/{courseId}/streakEntries/{date}
 export interface StreakEntryDoc {
   date: string; // YYYY-MM-DD (document ID)
