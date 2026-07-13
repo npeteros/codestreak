@@ -13,6 +13,7 @@ import {
 import type { Project, SprintTask } from "@/lib/actions/projects";
 import type { ProjectScope } from "@/lib/firebase/types";
 import { SprintBoardClient } from "@/components/sprint/SprintBoardClient";
+import { SprintBoardSkeleton } from "@/components/sprint/SprintBoardSkeleton";
 import { ProjectDescriptionPanel } from "@/components/sprint/ProjectDescriptionPanel";
 
 const Scope = {
@@ -233,7 +234,7 @@ export function ProjectsSprintClient({
               initialTasks={tasks}
             />
           )}
-          {loadingTasks && <p className="text-text-faint text-sm">Loading board…</p>}
+          {loadingTasks && <SprintBoardSkeleton />}
         </>
       )}
 

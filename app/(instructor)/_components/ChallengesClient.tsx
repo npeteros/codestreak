@@ -79,6 +79,15 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
   const [toast, setToast] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [isGenerating, setIsGenerating] = useState(false);
+  const [editingDraft, setEditingDraft] = useState<{
+    id: string;
+    title: string;
+    description: string;
+    difficulty: Difficulty;
+    starter: string;
+    schedDate: string;
+  } | null>(null);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   function showToast(msg: string) {
     setToast(msg);
@@ -144,6 +153,41 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
         );
         setAiDrafts((ds) => ds.map((d) => ({ ...d, selected: false })));
       });
+    }
+  }
+
+  function openEditDraft(c: AiChallengeDraft) {
+    setEditingDraft({
+      id: c.id,
+      title: c.title,
+      description: c.description,
+      difficulty: ((c.difficulty as Difficulty) || "MEDIUM"),
+      starter: c.starter,
+      schedDate,
+    });
+  }
+
+  async function handleSaveEditedSchedule() {
+    if (!editingDraft) return;
+    if (!editingDraft.title.trim()) { showToast("Add a title first"); return; }
+    if (!editingDraft.description.trim()) { showToast("Add a description first"); return; }
+    setIsSavingEdit(true);
+    const res = await createInstructorChallenge(courseId, {
+      title: editingDraft.title,
+      description: editingDraft.description,
+      difficulty: editingDraft.difficulty,
+      topicTag: aiTopic.slice(0, 40),
+      starterCode: editingDraft.starter,
+      scheduledFor: editingDraft.schedDate,
+      isDraft: false,
+    });
+    setIsSavingEdit(false);
+    if (res.success) {
+      showToast(`"${editingDraft.title}" scheduled for ${editingDraft.schedDate}`);
+      setAiDrafts((ds) => ds.filter((d) => d.id !== editingDraft.id));
+      setEditingDraft(null);
+    } else {
+      showToast("Failed to schedule — try again");
     }
   }
 
@@ -405,10 +449,7 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        showToast(`"${c.title}" added to schedule`);
-                        setAiDrafts((ds) =>
-                          ds.map((d) => (d.id === c.id ? { ...d, selected: true } : d))
-                        );
+                        openEditDraft(c);
                       }}
                       className="mt-auto self-start bg-transparent text-gold border border-gold/38 rounded-[8px] px-[13px] py-[7px] font-sans text-[12.5px] font-semibold cursor-pointer hover:bg-gold/10"
                     >
@@ -455,6 +496,124 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
           </button>
         </div>
       </div>
+
+      {editingDraft && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(8,8,10,0.62)" }}
+          onClick={() => !isSavingEdit && setEditingDraft(null)}
+        >
+          <div
+            className="w-full max-w-[560px] max-h-[86vh] overflow-y-auto bg-surface border border-white/[0.08] rounded-[16px] p-[24px] flex flex-col gap-[18px]"
+            style={{ animation: "csFade .18s ease" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col gap-1">
+              <h3 className="font-serif font-normal text-[1.35rem] text-text-primary">
+                Edit &amp; schedule
+              </h3>
+              <p className="text-sm text-text-muted">
+                Fine-tune this AI draft before it goes out to students.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                TITLE
+              </label>
+              <input
+                value={editingDraft.title}
+                onChange={(e) =>
+                  setEditingDraft((d) => (d ? { ...d, title: e.target.value } : d))
+                }
+                className="bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[13px] py-[11px] font-sans text-[14px] outline-none"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                DESCRIPTION
+              </label>
+              <textarea
+                value={editingDraft.description}
+                onChange={(e) =>
+                  setEditingDraft((d) => (d ? { ...d, description: e.target.value } : d))
+                }
+                className="min-h-[120px] resize-y bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[15px] py-[13px] font-sans text-[14px] leading-[1.6] outline-none"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                DIFFICULTY
+              </label>
+              <div className="flex gap-[7px] flex-wrap">
+                {(["EASY", "MEDIUM", "HARD"] as Difficulty[]).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() =>
+                      setEditingDraft((cur) => (cur ? { ...cur, difficulty: d } : cur))
+                    }
+                    className={[
+                      "px-3.5 py-1.5 rounded-[8px] font-mono text-[12px] border transition-colors cursor-pointer",
+                      editingDraft.difficulty === d
+                        ? "bg-gold text-bg border-gold"
+                        : "bg-transparent text-text-muted border-white/10 hover:border-white/20",
+                    ].join(" ")}
+                  >
+                    {DIFF_LABELS[d]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                STARTER CODE
+              </label>
+              <textarea
+                value={editingDraft.starter}
+                onChange={(e) =>
+                  setEditingDraft((d) => (d ? { ...d, starter: e.target.value } : d))
+                }
+                spellCheck={false}
+                className="min-h-[140px] resize-y bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[15px] py-[13px] font-mono text-[13px] leading-[1.65] outline-none"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2 max-w-[220px]">
+              <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                SCHEDULE DATE
+              </label>
+              <input
+                type="date"
+                value={editingDraft.schedDate}
+                onChange={(e) =>
+                  setEditingDraft((d) => (d ? { ...d, schedDate: e.target.value } : d))
+                }
+                className="bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[13px] py-[10px] font-mono text-[13px] outline-none [color-scheme:dark]"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-1">
+              <button
+                onClick={() => setEditingDraft(null)}
+                disabled={isSavingEdit}
+                className="bg-transparent text-[#D7D5CE] border border-white/[0.14] rounded-[9px] px-[18px] py-[10px] font-sans text-[13.5px] font-semibold cursor-pointer hover:border-white/25 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveEditedSchedule}
+                disabled={isSavingEdit}
+                className="bg-gold text-bg border-none rounded-[9px] px-5 py-[10px] font-sans text-[13.5px] font-semibold cursor-pointer hover:brightness-105 transition-all disabled:opacity-60"
+              >
+                {isSavingEdit ? "Scheduling…" : "Save & schedule"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {toast && (
         <div

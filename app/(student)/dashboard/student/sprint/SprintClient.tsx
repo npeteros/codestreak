@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { getSprintTasks } from "@/lib/actions/projects";
 import type { Project, SprintTask } from "@/lib/actions/projects";
 import { SprintBoardClient } from "@/components/sprint/SprintBoardClient";
+import { SprintBoardSkeleton } from "@/components/sprint/SprintBoardSkeleton";
 import { ProjectDescriptionPanel } from "@/components/sprint/ProjectDescriptionPanel";
 
 interface Props {
@@ -88,7 +89,7 @@ export function SprintClient({ courseId, currentUserId, initialProjects }: Props
               initialTasks={tasks}
             />
           )}
-          {loadingTasks && <p className="text-text-faint text-sm">Loading board…</p>}
+          {loadingTasks && <SprintBoardSkeleton />}
         </>
       )}
     </div>
