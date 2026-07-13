@@ -5,6 +5,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import type { CourseDoc } from "@/lib/firebase/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
+import { triggerJournalEntry } from "@/lib/actions/journal";
 
 const COOKIE_NAME = "codestreak_session";
 
@@ -109,6 +110,11 @@ export async function createCheckIn(courseId: string, note: string) {
   // 5. Fire-and-forget streak activity — do not block the check-in response
   recordStreakActivity({ studentId: uid, courseId, source: "checkin" }).catch(
     (err) => console.error("[streak] recordStreakActivity failed:", err)
+  );
+
+  // 5b. Fire-and-forget journal reflection — do not block the check-in response
+  triggerJournalEntry(uid, courseId, "CHECKIN").catch((err) =>
+    console.error("[journal] triggerJournalEntry failed:", err)
   );
 
   // 6. Return serialized result (createdAt as ISO string)

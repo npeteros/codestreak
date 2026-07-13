@@ -18,7 +18,7 @@ const navItems: NavItem[] = [
   { path: "/dashboard/student/challenge", label: "Daily Challenge", icon: Zap },
   { path: "/dashboard/student/checkin", label: "Check-in", icon: CircleCheck },
   { path: "/dashboard/student/sprint", label: "Sprint Board", icon: BarChart3 },
-  { path: "/dashboard/student/journal", label: "AI Journal", icon: BookOpen, disabled: true },
+  { path: "/dashboard/student/journal", label: "AI Journal", icon: BookOpen },
 ];
 
 type Props = {
