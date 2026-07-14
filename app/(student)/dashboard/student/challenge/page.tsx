@@ -1,27 +1,14 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
+import { requireUidOrRedirect } from "@/lib/auth/session";
 import { getTodayChallenge } from "@/lib/actions/challenges";
 import { ChallengeClient } from "./ChallengeClient";
-
-const COOKIE_NAME = "codestreak_session";
 
 export default async function StudentChallengePage({
   searchParams,
 }: {
   searchParams: Promise<{ courseId?: string }>;
 }) {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE_NAME);
-  if (!session?.value) redirect("/login");
-
-  let uid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-  } catch {
-    redirect("/login");
-  }
+  const uid = await requireUidOrRedirect();
 
   const { courseId: queryCourseId } = await searchParams;
   const hubSnap = await adminDb

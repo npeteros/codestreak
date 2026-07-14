@@ -1,14 +1,11 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
 import type { UserDoc } from "@/lib/firebase/types";
+import { requireUidOrRedirect } from "@/lib/auth/session";
 import {
   StudentOverviewClient,
   type CourseOption,
 } from "./StudentOverviewClient";
 import { getOverviewSummary, type OverviewSummary } from "@/lib/actions/overview";
-
-const COOKIE_NAME = "codestreak_session";
 
 function getGreetingTime(timezone: string): string {
   const hour = parseInt(
@@ -27,17 +24,7 @@ export default async function StudentOverviewPage({
 }: {
   searchParams: Promise<{ courseId?: string }>;
 }) {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE_NAME);
-  if (!session?.value) redirect("/login");
-
-  let uid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-  } catch {
-    redirect("/login");
-  }
+  const uid = await requireUidOrRedirect();
 
   const [userSnap, hubSnap] = await Promise.all([
     adminDb.collection("users").doc(uid).get(),

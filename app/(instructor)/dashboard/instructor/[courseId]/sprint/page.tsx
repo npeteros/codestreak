@@ -1,11 +1,8 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { adminAuth } from "@/lib/firebase/admin";
+import { requireUidOrRedirect } from "@/lib/auth/session";
 import { listProjectsForInstructor } from "@/lib/actions/projects";
 import { getRoster } from "@/lib/actions/instructor";
 import { ProjectsSprintClient } from "@/app/(instructor)/_components/ProjectsSprintClient";
-
-const COOKIE_NAME = "codestreak_session";
 
 export default async function InstructorSprintPage({
   params,
@@ -14,17 +11,7 @@ export default async function InstructorSprintPage({
 }) {
   const { courseId } = await params;
 
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE_NAME);
-  if (!session?.value) redirect("/login");
-
-  let uid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-  } catch {
-    redirect("/login");
-  }
+  const uid = await requireUidOrRedirect();
 
   const [projectsResult, rosterResult] = await Promise.all([
     listProjectsForInstructor(courseId),

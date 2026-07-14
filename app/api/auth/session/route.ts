@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth } from "@/lib/firebase/admin";
+import { SESSION_COOKIE_NAME as COOKIE_NAME } from "@/lib/auth/session";
 
-const COOKIE_NAME = "codestreak_session";
 const SESSION_DURATION_MS = 60 * 60 * 24 * 5 * 1000; // 5 days
 
 export async function POST(req: NextRequest) {

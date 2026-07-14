@@ -1,12 +1,9 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { Timestamp } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
 import type { CheckIn, CheckInDoc } from "@/lib/firebase/types";
+import { requireUidOrRedirect } from "@/lib/auth/session";
 import { CheckInPageClient } from "./CheckInPageClient";
 import type { CourseOption } from "./CheckInPageClient";
-
-const COOKIE_NAME = "codestreak_session";
 
 // Returns the UTC start-of-day for the current calendar date in the given timezone.
 function getStartOfDayUTC(tz: string): Date {
@@ -48,17 +45,7 @@ export default async function StudentCheckinPage({
   searchParams: Promise<{ courseId?: string }>;
 }) {
   // 1. Verify session
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE_NAME);
-  if (!session?.value) redirect("/login");
-
-  let uid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-  } catch {
-    redirect("/login");
-  }
+  const uid = await requireUidOrRedirect();
 
   // 2. Fetch enrolled courses from /students/{uid}/courses hub documents
   let courses: CourseOption[] = [];

@@ -1,31 +1,18 @@
 import { Suspense } from "react";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
+import { requireUidOrRedirect } from "@/lib/auth/session";
 import { StudentNav } from "./_components/StudentNav";
 import { StudentCourseSwitcher, type EnrolledCourse } from "./_components/StudentCourseSwitcher";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { StreakHeaderLoader } from "@/components/student/StreakHeaderLoader";
 import { Logomark } from "@/components/brand/Logomark";
 
-const COOKIE = "codestreak_session";
-
 export default async function StudentLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE);
-  if (!session?.value) redirect("/login");
-
-  let uid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-  } catch {
-    redirect("/login");
-  }
+  const uid = await requireUidOrRedirect();
 
   const hubSnap = await adminDb
     .collection("students")

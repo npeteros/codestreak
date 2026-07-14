@@ -1,8 +1,7 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { Timestamp } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
 import type {
   CourseDoc,
   StreakEntryDoc,
@@ -14,8 +13,7 @@ import type {
 } from "@/lib/firebase/types";
 import type { StreakData } from "@/lib/actions/streak";
 import { computeOverviewStreakData } from "./overview.calc";
-
-const COOKIE_NAME = "codestreak_session";
+import { getUid } from "@/lib/auth/session";
 
 function getStartOfDayUTC(tz: string): Date {
   const now = new Date();
@@ -67,17 +65,8 @@ export async function getOverviewSummary(
 ): Promise<
   ({ success: true } & OverviewSummary) | { success: false; error: string }
 > {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE_NAME);
-  if (!session?.value) return { success: false, error: "unauthenticated" };
-
-  let uid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-  } catch {
-    return { success: false, error: "unauthenticated" };
-  }
+  const uid = await getUid();
+  if (!uid) return { success: false, error: "unauthenticated" };
 
   const courseSnap = await adminDb.collection("courses").doc(courseId).get();
   if (!courseSnap.exists) return { success: false, error: "course_not_found" };

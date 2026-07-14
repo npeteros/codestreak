@@ -1,12 +1,10 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
 import type { StreakEntryDoc, CourseDoc } from "@/lib/firebase/types";
 import type { StreakEntry as CalcEntry } from "@/lib/streak/calculate";
 import { computeStreakData } from "./streak.calc";
-
-const COOKIE_NAME = "codestreak_session";
+import { getUid } from "@/lib/auth/session";
 
 // ── Existing types (used by StreakHeader / StreakHeaderLoader) ────────────────
 
@@ -28,17 +26,8 @@ export interface StreakData {
 export async function getStreakData(): Promise<
   { success: true; data: StreakData } | { success: false; error: string }
 > {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE_NAME);
-  if (!session?.value) return { success: false, error: "unauthenticated" };
-
-  let uid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-  } catch {
-    return { success: false, error: "unauthenticated" };
-  }
+  const uid = await getUid();
+  if (!uid) return { success: false, error: "unauthenticated" };
 
   // Pick first enrolled course (hub doc lives at /students/{uid}/courses/{courseId})
   const hubSnap = await adminDb
@@ -95,17 +84,8 @@ export async function recordStreakActivity({
   source: "challenge" | "checkin" | "sprintCard";
 }): Promise<{ success: true; date: string } | { success: false; error: string }> {
   // 1. Verify session — uid must match studentId
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE_NAME);
-  if (!session?.value) return { success: false, error: "unauthenticated" };
-
-  let uid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-  } catch {
-    return { success: false, error: "unauthenticated" };
-  }
+  const uid = await getUid();
+  if (!uid) return { success: false, error: "unauthenticated" };
 
   if (uid !== studentId) return { success: false, error: "forbidden" };
 
@@ -159,17 +139,8 @@ export async function getStreakEntries({
   { success: true; entries: CalcEntry[] } | { success: false; error: string }
 > {
   // 1. Verify session — uid must match studentId
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE_NAME);
-  if (!session?.value) return { success: false, error: "unauthenticated" };
-
-  let uid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-  } catch {
-    return { success: false, error: "unauthenticated" };
-  }
+  const uid = await getUid();
+  if (!uid) return { success: false, error: "unauthenticated" };
 
   if (uid !== studentId) return { success: false, error: "forbidden" };
 

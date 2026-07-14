@@ -1,13 +1,11 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
 import type { CourseDoc } from "@/lib/firebase/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
 import { triggerJournalEntry } from "@/lib/actions/journal";
-
-const COOKIE_NAME = "codestreak_session";
+import { getUid } from "@/lib/auth/session";
 
 // Returns the UTC start-of-day for the current calendar date in the given timezone.
 // Uses Intl to find the UTC offset by comparing UTC noon against its local equivalent.
@@ -50,17 +48,8 @@ function getStartOfDayUTC(tz: string): Date {
 
 export async function createCheckIn(courseId: string, note: string) {
   // 1. Verify session cookie
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE_NAME);
-  if (!session?.value) {
-    return { success: false as const, error: "unauthenticated" as const };
-  }
-
-  let uid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-  } catch {
+  const uid = await getUid();
+  if (!uid) {
     return { success: false as const, error: "unauthenticated" as const };
   }
 

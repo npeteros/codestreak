@@ -1,24 +1,10 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { FieldValue } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
 import type { JournalEntryDoc } from "@/lib/firebase/types";
+import { getUid } from "@/lib/auth/session";
 import OpenAI from "openai";
-
-const COOKIE_NAME = "codestreak_session";
-
-async function verifySession(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE_NAME);
-  if (!session?.value) return null;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    return decoded.uid;
-  } catch {
-    return null;
-  }
-}
 
 // Keeps token usage/cost bounded and avoids truncating mid-multibyte-char.
 const MAX_CODE_CHARS = 3000;
@@ -106,7 +92,7 @@ export async function triggerJournalEntry(
 }
 
 export async function getJournalEntries(courseId: string) {
-  const uid = await verifySession();
+  const uid = await getUid();
   if (!uid) return { success: false as const, error: "unauthenticated" as const };
 
   const snap = await adminDb

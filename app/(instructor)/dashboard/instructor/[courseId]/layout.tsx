@@ -1,13 +1,11 @@
-import { cookies } from "next/headers";
-import { redirect, notFound } from "next/navigation";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { notFound } from "next/navigation";
+import { adminDb } from "@/lib/firebase/admin";
 import type { UserDoc, CourseDoc } from "@/lib/firebase/types";
+import { requireUidOrRedirect } from "@/lib/auth/session";
 import { InstructorNav } from "@/app/(instructor)/_components/InstructorNav";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { CourseSwitcher } from "@/app/(instructor)/_components/CourseSwitcher";
 import { Logomark } from "@/components/brand/Logomark";
-
-const COOKIE = "codestreak_session";
 
 export default async function CourseLayout({
   children,
@@ -18,17 +16,7 @@ export default async function CourseLayout({
 }) {
   const { courseId } = await params;
 
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE);
-  if (!session?.value) redirect("/login");
-
-  let uid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-  } catch {
-    redirect("/login");
-  }
+  const uid = await requireUidOrRedirect();
 
   const [userSnap, courseSnap, allCoursesSnap] = await Promise.all([
     adminDb.collection("users").doc(uid).get(),

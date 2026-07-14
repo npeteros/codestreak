@@ -1,10 +1,8 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
 import type {
-  UserDoc,
   UserRole,
   CourseDoc,
   ProjectDoc,
@@ -14,8 +12,7 @@ import type {
 } from "@/lib/firebase/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
 import { triggerJournalEntry } from "@/lib/actions/journal";
-
-const COOKIE = "codestreak_session";
+import { getUid, getCurrentUser } from "@/lib/auth/session";
 
 export type Project = {
   id: string;
@@ -38,24 +35,6 @@ export type SprintTask = {
 };
 
 // ── Session / role helpers ──────────────────────────────────────────────────
-
-async function getSession(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE);
-  if (!session?.value) return null;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    return decoded.uid;
-  } catch {
-    return null;
-  }
-}
-
-async function getRole(uid: string): Promise<UserRole | null> {
-  const snap = await adminDb.collection("users").doc(uid).get();
-  if (!snap.exists) return null;
-  return (snap.data() as UserDoc).role;
-}
 
 async function getCourseForInstructor(
   uid: string,
@@ -93,11 +72,9 @@ async function verifyProjectAccess(
   | { ok: true; uid: string; role: UserRole; project: ProjectDoc }
   | { ok: false; error: string }
 > {
-  const uid = await getSession();
-  if (!uid) return { ok: false, error: "unauthenticated" };
-
-  const role = await getRole(uid);
-  if (!role) return { ok: false, error: "unauthenticated" };
+  const user = await getCurrentUser();
+  if (!user) return { ok: false, error: "unauthenticated" };
+  const { uid, role } = user;
 
   const projSnap = await projectsCol(courseId).doc(projectId).get();
   if (!projSnap.exists) return { ok: false, error: "not_found" };
@@ -154,9 +131,10 @@ export async function createProject(
     studentIds?: string[];
   }
 ): Promise<{ success: boolean; id?: string; error?: string }> {
-  const uid = await getSession();
+  const uid = await getUid();
   if (!uid) return { success: false, error: "unauthenticated" };
-  if ((await getRole(uid)) !== "INSTRUCTOR") return { success: false, error: "forbidden" };
+  if ((await getCurrentUser())?.role !== "INSTRUCTOR")
+    return { success: false, error: "forbidden" };
 
   const course = await getCourseForInstructor(uid, courseId);
   if (!course) return { success: false, error: "no_course" };
@@ -194,9 +172,10 @@ export async function updateProject(
     studentIds?: string[];
   }
 ): Promise<{ success: boolean; error?: string }> {
-  const uid = await getSession();
+  const uid = await getUid();
   if (!uid) return { success: false, error: "unauthenticated" };
-  if ((await getRole(uid)) !== "INSTRUCTOR") return { success: false, error: "forbidden" };
+  if ((await getCurrentUser())?.role !== "INSTRUCTOR")
+    return { success: false, error: "forbidden" };
 
   const course = await getCourseForInstructor(uid, courseId);
   if (!course) return { success: false, error: "no_course" };
@@ -227,7 +206,7 @@ export async function updateProject(
 export async function listProjectsForInstructor(
   courseId: string
 ): Promise<{ success: true; projects: Project[] } | { success: false; error: string }> {
-  const uid = await getSession();
+  const uid = await getUid();
   if (!uid) return { success: false, error: "unauthenticated" };
   const course = await getCourseForInstructor(uid, courseId);
   if (!course) return { success: false, error: "no_course" };
@@ -243,9 +222,10 @@ export async function listProjectsForInstructor(
 export async function listProjectsForStudent(
   courseId: string
 ): Promise<{ success: true; projects: Project[] } | { success: false; error: string }> {
-  const uid = await getSession();
+  const uid = await getUid();
   if (!uid) return { success: false, error: "unauthenticated" };
-  if ((await getRole(uid)) !== "STUDENT") return { success: false, error: "forbidden" };
+  if ((await getCurrentUser())?.role !== "STUDENT")
+    return { success: false, error: "forbidden" };
   if (!(await isEnrolled(courseId, uid))) return { success: false, error: "forbidden" };
 
   const snap = await projectsCol(courseId).get();
@@ -262,7 +242,7 @@ export async function toggleProjectArchive(
   courseId: string,
   projectId: string
 ): Promise<{ success: boolean; isArchived?: boolean; error?: string }> {
-  const uid = await getSession();
+  const uid = await getUid();
   if (!uid) return { success: false, error: "unauthenticated" };
   const course = await getCourseForInstructor(uid, courseId);
   if (!course) return { success: false, error: "no_course" };

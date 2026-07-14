@@ -5,8 +5,7 @@ import { redirect } from "next/navigation";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
 import type { UserRole } from "@/lib/firebase/types";
-
-const COOKIE_NAME = "codestreak_session";
+import { SESSION_COOKIE_NAME as COOKIE_NAME } from "@/lib/auth/session";
 
 export async function signUp(
   email: string,

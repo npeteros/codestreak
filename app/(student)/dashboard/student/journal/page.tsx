@@ -1,9 +1,6 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
+import { requireUidOrRedirect } from "@/lib/auth/session";
 import { getJournalEntries } from "@/lib/actions/journal";
-
-const COOKIE_NAME = "codestreak_session";
 
 const TRIGGER_SOURCE: Record<string, string> = {
   CHALLENGE: "Daily Challenge",
@@ -31,17 +28,7 @@ export default async function StudentJournalPage({
 }: {
   searchParams: Promise<{ courseId?: string }>;
 }) {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE_NAME);
-  if (!session?.value) redirect("/login");
-
-  let uid: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-  } catch {
-    redirect("/login");
-  }
+  const uid = await requireUidOrRedirect();
 
   const { courseId: queryCourseId } = await searchParams;
   const hubSnap = await adminDb

@@ -1,8 +1,7 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
 import type {
   CourseDoc,
   ChallengeDoc,
@@ -11,20 +10,7 @@ import type {
 } from "@/lib/firebase/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
 import { triggerJournalEntry } from "@/lib/actions/journal";
-
-const COOKIE_NAME = "codestreak_session";
-
-async function verifySession(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE_NAME);
-  if (!session?.value) return null;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    return decoded.uid;
-  } catch {
-    return null;
-  }
-}
+import { getUid } from "@/lib/auth/session";
 
 function getStartOfDayUTC(tz: string): Date {
   const now = new Date();
@@ -65,7 +51,7 @@ export async function createChallenge(
 }
 
 export async function getTodayChallenge(courseId: string) {
-  const uid = await verifySession();
+  const uid = await getUid();
   if (!uid) return { success: false as const, error: "unauthenticated" as const };
 
   const courseSnap = await adminDb.collection("courses").doc(courseId).get();
@@ -132,7 +118,7 @@ export async function submitChallenge(
   challengeId: string,
   code: string
 ) {
-  const uid = await verifySession();
+  const uid = await getUid();
   if (!uid) return { success: false as const, error: "unauthenticated" as const };
 
   const existing = await adminDb

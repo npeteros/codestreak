@@ -1,27 +1,14 @@
 "use server";
 
 import { FieldValue } from "firebase-admin/firestore";
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import type { UserDoc, CourseDoc } from "@/lib/firebase/types";
-
-const COOKIE = "codestreak_session";
+import { adminDb } from "@/lib/firebase/admin";
+import type { CourseDoc } from "@/lib/firebase/types";
+import { getCurrentUser, requireRole } from "@/lib/auth/session";
 
 async function getVerifiedInstructor(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE);
-  if (!session?.value) return null;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    const uid = decoded.uid;
-    const userSnap = await adminDb.collection("users").doc(uid).get();
-    if (!userSnap.exists) return null;
-    if ((userSnap.data() as UserDoc).role !== "INSTRUCTOR") return null;
-    return uid;
-  } catch {
-    return null;
-  }
+  const user = await requireRole("INSTRUCTOR");
+  return user?.uid ?? null;
 }
 
 function generateInviteCode(): string {
@@ -100,19 +87,8 @@ export async function enrollStudent(courseId: string, studentId: string) {
 }
 
 async function getVerifiedStudent(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE);
-  if (!session?.value) return null;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    const uid = decoded.uid;
-    const userSnap = await adminDb.collection("users").doc(uid).get();
-    if (!userSnap.exists) return null;
-    if ((userSnap.data() as UserDoc).role !== "STUDENT") return null;
-    return uid;
-  } catch {
-    return null;
-  }
+  const user = await requireRole("STUDENT");
+  return user?.uid ?? null;
 }
 
 export async function getJoinPageData(inviteCode: string): Promise<
@@ -140,29 +116,16 @@ export async function getJoinPageData(inviteCode: string): Promise<
     languageTag: data.languageTag,
   };
 
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE);
-  if (!session?.value) return { success: true, course, authState: "unauthenticated" };
+  const user = await getCurrentUser();
+  if (!user) return { success: true, course, authState: "unauthenticated" };
 
-  let uid: string;
-  let role: string;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    uid = decoded.uid;
-    const userSnap = await adminDb.collection("users").doc(uid).get();
-    if (!userSnap.exists) return { success: true, course, authState: "unauthenticated" };
-    role = (userSnap.data() as UserDoc).role;
-  } catch {
-    return { success: true, course, authState: "unauthenticated" };
-  }
-
-  if (role !== "STUDENT") return { success: true, course, authState: "instructor" };
+  if (user.role !== "STUDENT") return { success: true, course, authState: "instructor" };
 
   const enrollSnap = await adminDb
     .collection("courses")
     .doc(doc.id)
     .collection("enrollments")
-    .doc(uid)
+    .doc(user.uid)
     .get();
 
   return {

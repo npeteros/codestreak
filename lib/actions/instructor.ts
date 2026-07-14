@@ -1,9 +1,8 @@
 "use server";
 
-import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminDb } from "@/lib/firebase/admin";
 import type {
   UserDoc,
   CourseDoc,
@@ -14,9 +13,9 @@ import type {
   ChallengeSubmissionDoc,
   CheckInDoc,
 } from "@/lib/firebase/types";
+import { requireRole } from "@/lib/auth/session";
 import OpenAI from "openai";
 
-const COOKIE = "codestreak_session";
 const AT_RISK_DAYS = 3;
 const HEATMAP_WEEKS = 26;
 const DRAWER_RECENT_LIMIT = 5;
@@ -119,25 +118,9 @@ export type AiChallengeDraft = {
 
 // ── Private helpers ──────────────────────────────────────────────────────────
 
-async function getSession(): Promise<string | null> {
-  const cookieStore = await cookies();
-  const session = cookieStore.get(COOKIE);
-  if (!session?.value) return null;
-  try {
-    const decoded = await adminAuth.verifySessionCookie(session.value, true);
-    return decoded.uid;
-  } catch {
-    return null;
-  }
-}
-
 async function verifyInstructor(): Promise<string | null> {
-  const uid = await getSession();
-  if (!uid) return null;
-  const userSnap = await adminDb.collection("users").doc(uid).get();
-  if (!userSnap.exists) return null;
-  if ((userSnap.data() as UserDoc).role !== "INSTRUCTOR") return null;
-  return uid;
+  const user = await requireRole("INSTRUCTOR");
+  return user?.uid ?? null;
 }
 
 async function getCourse(
