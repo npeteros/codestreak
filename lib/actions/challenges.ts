@@ -166,9 +166,24 @@ export async function submitChallenge(
     (err) => console.error("[streak] recordStreakActivity failed:", err)
   );
 
-  triggerJournalEntry(uid, courseId, "CHALLENGE").catch(
-    (err) => console.error("[journal] triggerJournalEntry failed:", err)
-  );
+  adminDb
+    .collection("courses")
+    .doc(courseId)
+    .collection("challenges")
+    .doc(challengeId)
+    .get()
+    .then((challengeSnap) => {
+      if (!challengeSnap.exists) return;
+      const challenge = challengeSnap.data() as ChallengeDoc;
+      return triggerJournalEntry(uid, courseId, {
+        triggerType: "CHALLENGE",
+        title: challenge.title,
+        difficulty: challenge.difficulty,
+        topicTag: challenge.topicTag,
+        code,
+      });
+    })
+    .catch((err) => console.error("[journal] triggerJournalEntry failed:", err));
 
   return { success: true as const };
 }

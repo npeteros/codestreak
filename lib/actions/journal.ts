@@ -3,7 +3,7 @@
 import { cookies } from "next/headers";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import type { JournalEntryDoc, JournalTriggerType } from "@/lib/firebase/types";
+import type { JournalEntryDoc } from "@/lib/firebase/types";
 import OpenAI from "openai";
 
 const COOKIE_NAME = "codestreak_session";
@@ -20,17 +20,53 @@ async function verifySession(): Promise<string | null> {
   }
 }
 
-const TRIGGER_LABEL: Record<JournalTriggerType, string> = {
-  CHALLENGE: "daily coding challenge",
-  CHECKIN: "daily check-in",
-  SPRINT_CARD: "sprint card completion",
-};
+// Keeps token usage/cost bounded and avoids truncating mid-multibyte-char.
+const MAX_CODE_CHARS = 3000;
+
+export type JournalContext =
+  | {
+      triggerType: "CHALLENGE";
+      title: string;
+      difficulty: string;
+      topicTag: string;
+      code: string;
+    }
+  | { triggerType: "CHECKIN"; note: string }
+  | { triggerType: "SPRINT_CARD"; taskTitle: string; projectName: string };
+
+function buildUserPrompt(context: JournalContext): string {
+  switch (context.triggerType) {
+    case "CHALLENGE": {
+      const code =
+        context.code.length > MAX_CODE_CHARS
+          ? context.code.slice(0, MAX_CODE_CHARS) + "\n… (truncated)"
+          : context.code;
+      return (
+        `Write a short journal reflection for a student who just submitted their solution to the ` +
+        `"${context.title}" coding challenge (difficulty: ${context.difficulty}, topic: ${context.topicTag}). ` +
+        `Comment specifically on their code style and approach — naming, structure, clarity, any notable choices. ` +
+        `Here is their submission:\n\n${code}`
+      );
+    }
+    case "CHECKIN":
+      return (
+        `Write a short journal reflection responding to a student's daily check-in note. ` +
+        `Engage with what they actually wrote — don't just acknowledge that they checked in.\n\n` +
+        `Their note: "${context.note}"`
+      );
+    case "SPRINT_CARD":
+      return (
+        `Write a short journal reflection for a student who just completed the sprint task ` +
+        `"${context.taskTitle}" on the project "${context.projectName}".`
+      );
+  }
+}
 
 // Called fire-and-forget from other server actions (uid already verified by caller).
 export async function triggerJournalEntry(
   studentId: string,
   courseId: string,
-  triggerType: JournalTriggerType
+  context: JournalContext
 ) {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -46,7 +82,7 @@ export async function triggerJournalEntry(
       },
       {
         role: "user",
-        content: `Write a short journal reflection for a student who just completed their ${TRIGGER_LABEL[triggerType]}.`,
+        content: buildUserPrompt(context),
       },
     ],
     max_tokens: 120,
@@ -64,7 +100,7 @@ export async function triggerJournalEntry(
     .collection("journalEntries")
     .add({
       content,
-      triggerType,
+      triggerType: context.triggerType,
       createdAt: FieldValue.serverTimestamp(),
     });
 }

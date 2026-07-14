@@ -113,7 +113,7 @@ export async function createCheckIn(courseId: string, note: string) {
   );
 
   // 5b. Fire-and-forget journal reflection — do not block the check-in response
-  triggerJournalEntry(uid, courseId, "CHECKIN").catch((err) =>
+  triggerJournalEntry(uid, courseId, { triggerType: "CHECKIN", note }).catch((err) =>
     console.error("[journal] triggerJournalEntry failed:", err)
   );
 

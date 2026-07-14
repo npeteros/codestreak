@@ -426,7 +426,11 @@ export async function moveSprintTask(
     recordStreakActivity({ studentId: access.uid, courseId, source: "sprintCard" }).catch(
       (err) => console.error("[projects] recordStreakActivity failed:", err)
     );
-    triggerJournalEntry(access.uid, courseId, "SPRINT_CARD").catch((err) =>
+    triggerJournalEntry(access.uid, courseId, {
+      triggerType: "SPRINT_CARD",
+      taskTitle: task.title,
+      projectName: access.project.name,
+    }).catch((err) =>
       console.error("[projects] triggerJournalEntry failed:", err)
     );
   }
