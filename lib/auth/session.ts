@@ -11,18 +11,29 @@ export const SESSION_COOKIE_NAME = "codestreak_session";
 // Exposed separately from getUid() because proxy.ts reads the cookie via
 // NextRequest.cookies (not next/headers' cookies()) and needs the decoded
 // token itself (for the `role` custom claim), not just a uid.
+//
+// checkRevoked defaults to false: it forces a network round-trip to
+// Google's Identity Toolkit on top of the local JWT verification, which
+// adds real latency if paid on every request. High-frequency, low-stakes
+// call sites (proxy.ts's per-navigation check, getUid()) accept the default
+// and skip it; getCurrentUser() — the role gate behind every
+// instructor-privileged Server Action and redirect-guarded page — opts in,
+// since that's exactly the "was this account's access just revoked" check
+// that matters.
 export async function verifySessionCookie(
-  value: string
+  value: string,
+  checkRevoked = false
 ): Promise<DecodedIdToken | null> {
   try {
-    return await adminAuth.verifySessionCookie(value, true);
+    return await adminAuth.verifySessionCookie(value, checkRevoked);
   } catch {
     return null;
   }
 }
 
-// Cheapest check: cookie verification only, no Firestore read. Matches call
-// sites that only ever needed the uid (e.g. to scope a query to the caller).
+// Cheapest check: local cookie verification only, no Firestore read and no
+// revocation check. Matches call sites that only ever needed the uid (e.g.
+// to scope a query to the caller).
 export async function getUid(): Promise<string | null> {
   const cookieStore = await cookies();
   const value = cookieStore.get(SESSION_COOKIE_NAME)?.value;
@@ -38,14 +49,18 @@ export interface CurrentUser {
   email: string;
 }
 
-// uid + profile + role, via a users/{uid} Firestore read. Returns null if
-// the session is missing/invalid or the user doc doesn't exist.
+// uid + profile + role, via a users/{uid} Firestore read, with revocation
+// checking enabled (see verifySessionCookie's comment). Returns null if the
+// session is missing/invalid/revoked or the user doc doesn't exist.
 export async function getCurrentUser(): Promise<CurrentUser | null> {
-  const uid = await getUid();
-  if (!uid) return null;
-  const data = await getUser(uid);
+  const cookieStore = await cookies();
+  const value = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  if (!value) return null;
+  const decoded = await verifySessionCookie(value, true);
+  if (!decoded) return null;
+  const data = await getUser(decoded.uid);
   if (!data) return null;
-  return { uid, role: data.role, name: data.name, email: data.email };
+  return { uid: decoded.uid, role: data.role, name: data.name, email: data.email };
 }
 
 // Non-throwing role gate, for Server Actions that return a {success:false}
