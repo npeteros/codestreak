@@ -5,6 +5,23 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessionCookie = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
+  // Root marketing page: only act on an existing valid session (redirect an
+  // already-logged-in visitor to their dashboard). Anonymous visitors fall
+  // through untouched so the page stays static/prerenderable — no
+  // cookie-verify or Firestore read on the app's highest-traffic route.
+  if (pathname === "/") {
+    if (!sessionCookie) return NextResponse.next();
+    const decoded = await verifySessionCookie(sessionCookie);
+    if (!decoded) return NextResponse.next();
+    const role = decoded.role as "INSTRUCTOR" | "STUDENT" | undefined;
+    return NextResponse.redirect(
+      new URL(
+        role === "INSTRUCTOR" ? "/dashboard/instructor" : "/dashboard/student",
+        request.url
+      )
+    );
+  }
+
   if (!sessionCookie) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
@@ -36,5 +53,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*"],
+  matcher: ["/", "/dashboard/:path*"],
 };

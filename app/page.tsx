@@ -1,8 +1,6 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { generateMetadata } from "@/lib/seo/metadata";
 import { Logomark } from "@/components/brand/Logomark";
-import { getCurrentUser } from "@/lib/auth/session";
 
 export const metadata = generateMetadata({
   title: "CodeStreak",
@@ -11,14 +9,11 @@ export const metadata = generateMetadata({
   path: "/",
 });
 
-export default async function Home() {
-  const user = await getCurrentUser();
-  if (user) {
-    redirect(
-      user.role === "INSTRUCTOR" ? "/dashboard/instructor" : "/dashboard/student"
-    );
-  }
-
+// The already-logged-in redirect lives in proxy.ts (decodes the JWT role
+// claim, no Firestore read) so this page has no runtime dependency and can
+// render statically instead of paying a cookie-verify + Firestore read on
+// every anonymous visit to the app's highest-traffic route.
+export default function Home() {
   return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center gap-8 p-8">
       <div className="flex items-center gap-3">
