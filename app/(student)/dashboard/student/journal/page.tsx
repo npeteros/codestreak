@@ -1,3 +1,5 @@
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { requireUidOrRedirect } from "@/lib/auth/session";
 import { listEnrolledCourses } from "@/lib/repositories/studentHub";
 import { getJournalEntries } from "@/lib/actions/journal";
@@ -102,9 +104,11 @@ export default async function StudentJournalPage({
                 {formatRelativeTime(latest.createdAt)}
               </span>
             </div>
-            <p className="font-serif italic text-[21px] leading-normal text-[#F0EEE7] m-0">
-              {latest.content}
-            </p>
+            <div className="markdown-body font-serif italic text-[21px] leading-normal text-[#F0EEE7]">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {latest.content}
+              </ReactMarkdown>
+            </div>
           </div>
 
           {/* Earlier entries */}
@@ -127,9 +131,11 @@ export default async function StudentJournalPage({
                         {formatRelativeTime(entry.createdAt)}
                       </span>
                     </div>
-                    <p className="text-[14px] text-[#C2C0B9] leading-[1.65] m-0">
-                      {entry.content}
-                    </p>
+                    <div className="markdown-body text-[14px] text-[#C2C0B9] leading-[1.65]">
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {entry.content}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                 ))}
               </div>

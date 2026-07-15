@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Zap, CircleCheck, BarChart3, BookOpen } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { getOverviewSummary, type OverviewSummary } from "@/lib/actions/overview";
 import type { ChallengeDifficulty, JournalTriggerType } from "@/lib/firebase/types";
 
@@ -288,8 +290,10 @@ export function StudentOverviewClient({
             <CardHeader icon={BookOpen} label="AI Journal" />
             {summary?.latestJournal ? (
               <>
-                <div className="text-[13.5px] text-text-primary leading-[1.6] italic line-clamp-3">
-                  {summary.latestJournal.content}
+                <div className="markdown-body text-[13.5px] text-text-primary leading-[1.6] italic line-clamp-3">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {summary.latestJournal.content}
+                  </ReactMarkdown>
                 </div>
                 <div className="font-mono text-[11px] text-text-faint mt-auto">
                   {TRIGGER_LABEL[summary.latestJournal.triggerType]} ·{" "}

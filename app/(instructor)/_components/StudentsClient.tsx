@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { getStudentDetail, nudgeStudent } from "@/lib/actions/instructor";
 import type { StudentRow, StudentDetail } from "@/lib/actions/instructor";
 import { difficultyBadgeClass, formatShortDate } from "@/lib/format";
@@ -198,8 +200,10 @@ function StudentDrawer({ courseId, student, onClose, onNudge, nudging }: DrawerP
                     })}
                   </span>
                 </div>
-                <div className="text-[13.5px] text-[#C2C0B9] leading-[1.6] italic">
-                  {e.content}
+                <div className="markdown-body text-[13.5px] text-[#C2C0B9] leading-[1.6] italic">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {e.content}
+                  </ReactMarkdown>
                 </div>
               </div>
             ))}
