@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import type { CourseDoc, StreakEntryDoc } from "@/lib/firebase/types";
 import { requireRole } from "@/lib/auth/session";
+import { initials } from "@/lib/format";
 import { getUser } from "@/lib/repositories/users";
 import * as coursesRepo from "@/lib/repositories/courses";
 import * as enrollmentsRepo from "@/lib/repositories/enrollments";
@@ -185,15 +186,6 @@ export async function getInstructorCourses(): Promise<
       inviteCode: data.inviteCode,
     })),
   };
-}
-
-function initials(name: string): string {
-  return name
-    .split(" ")
-    .map((p) => p[0] ?? "")
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
 }
 
 // ── Server actions ───────────────────────────────────────────────────────────

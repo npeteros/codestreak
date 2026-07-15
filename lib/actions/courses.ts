@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUser, requireRole } from "@/lib/auth/session";
+import { generateInviteCode } from "@/lib/domain/inviteCode";
 import * as coursesRepo from "@/lib/repositories/courses";
 import * as enrollmentsRepo from "@/lib/repositories/enrollments";
 import * as studentHubRepo from "@/lib/repositories/studentHub";
@@ -9,13 +10,6 @@ import * as studentHubRepo from "@/lib/repositories/studentHub";
 async function getVerifiedInstructor(): Promise<string | null> {
   const user = await requireRole("INSTRUCTOR");
   return user?.uid ?? null;
-}
-
-function generateInviteCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return Array.from({ length: 6 }, () =>
-    chars[Math.floor(Math.random() * chars.length)]
-  ).join("");
 }
 
 export async function createCourse(data: {

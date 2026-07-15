@@ -12,34 +12,7 @@ import { findSubmissionForChallenge } from "@/lib/repositories/submissions";
 import { listRecentCheckIns } from "@/lib/repositories/checkins";
 import { listSprintCards } from "@/lib/repositories/sprintCards";
 import { listRecentJournalEntries } from "@/lib/repositories/journal";
-
-function getStartOfDayUTC(tz: string): Date {
-  const now = new Date();
-  const dateStr = now.toLocaleDateString("en-CA", { timeZone: tz });
-  const noonUTC = new Date(dateStr + "T12:00:00Z");
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz,
-    hour12: false,
-    year: "numeric",
-    month: "numeric",
-    day: "numeric",
-    hour: "numeric",
-    minute: "numeric",
-  }).formatToParts(noonUTC);
-  const get = (type: string) =>
-    parseInt(parts.find((p) => p.type === type)!.value);
-  const [lYear, lMonth, lDay, lHour, lMinute] = [
-    get("year"),
-    get("month"),
-    get("day"),
-    get("hour"),
-    get("minute"),
-  ];
-  const utcOffsetMs =
-    noonUTC.getTime() - Date.UTC(lYear, lMonth - 1, lDay, lHour, lMinute);
-  const [dsYear, dsMonth, dsDay] = dateStr.split("-").map(Number);
-  return new Date(Date.UTC(dsYear, dsMonth - 1, dsDay) + utcOffsetMs);
-}
+import { getStartOfDayUTC } from "@/lib/domain/time";
 
 export interface OverviewSummary {
   streakData: StreakData;

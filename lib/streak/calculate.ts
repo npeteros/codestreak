@@ -1,11 +1,19 @@
-export interface StreakEntry {
-  date: string;
-  sources: {
-    challenge: boolean;
-    checkin: boolean;
-    sprintCard: boolean;
-  };
-}
+// Feeds the still-unmounted StreakSummary/ActivityHeatmap components (see
+// components/student/{StreakSummary,ActivityHeatmap}.tsx and
+// lib/actions/streak.ts's getStreakEntries()). Kept in sync with the
+// canonical logic in lib/domain/streak.ts rather than reimplementing it, in
+// case these components get wired up later.
+
+import type { StreakEntryDoc } from "@/lib/firebase/types";
+import {
+  ALL_SOURCES_RULE,
+  isActiveDay as domainIsActiveDay,
+  getCurrentStreak as domainGetCurrentStreak,
+  getLongestStreak as domainGetLongestStreak,
+  getTotalActiveDays as domainGetTotalActiveDays,
+} from "@/lib/domain/streak";
+
+export type StreakEntry = StreakEntryDoc;
 
 export interface HeatmapCell {
   date: string;
@@ -14,11 +22,13 @@ export interface HeatmapCell {
 }
 
 export function isActiveDay(entry: StreakEntry): boolean {
-  return (
-    (entry.sources.challenge ?? false) ||
-    (entry.sources.checkin ?? false) ||
-    (entry.sources.sprintCard ?? false)
-  );
+  return domainIsActiveDay(entry.sources, ALL_SOURCES_RULE);
+}
+
+function toMap(entries: StreakEntry[]): Map<string, StreakEntry> {
+  const m = new Map<string, StreakEntry>();
+  for (const e of entries) m.set(e.date, e);
+  return m;
 }
 
 // entries must be sorted descending by date
@@ -26,48 +36,15 @@ export function getCurrentStreak(
   entries: StreakEntry[],
   todayDate: string
 ): number {
-  const activeDates = new Set(entries.filter(isActiveDay).map((e) => e.date));
-
-  const cur = new Date(todayDate + "T12:00:00Z");
-  if (!activeDates.has(todayDate)) {
-    cur.setUTCDate(cur.getUTCDate() - 1);
-  }
-
-  let streak = 0;
-  while (true) {
-    const ds = cur.toISOString().slice(0, 10);
-    if (!activeDates.has(ds)) break;
-    streak++;
-    cur.setUTCDate(cur.getUTCDate() - 1);
-  }
-  return streak;
+  return domainGetCurrentStreak(toMap(entries), todayDate, ALL_SOURCES_RULE);
 }
 
 export function getLongestStreak(entries: StreakEntry[]): number {
-  const sorted = entries
-    .filter(isActiveDay)
-    .map((e) => e.date)
-    .sort();
-
-  let longest = 0;
-  let run = 0;
-  let prev: Date | null = null;
-
-  for (const ds of sorted) {
-    const d = new Date(ds + "T12:00:00Z");
-    if (prev && d.getTime() - prev.getTime() === 86_400_000) {
-      run++;
-    } else {
-      run = 1;
-    }
-    if (run > longest) longest = run;
-    prev = d;
-  }
-  return longest;
+  return domainGetLongestStreak(toMap(entries), ALL_SOURCES_RULE);
 }
 
 export function getTotalActiveDays(entries: StreakEntry[]): number {
-  return entries.filter(isActiveDay).length;
+  return domainGetTotalActiveDays(toMap(entries), ALL_SOURCES_RULE);
 }
 
 // Returns 365 cells ordered oldest → newest
@@ -75,10 +52,7 @@ export function getHeatmapGrid(
   entries: StreakEntry[],
   todayDate: string
 ): HeatmapCell[] {
-  const entryMap = new Map<string, StreakEntry>();
-  for (const e of entries) {
-    entryMap.set(e.date, e);
-  }
+  const entryMap = toMap(entries);
 
   const today = new Date(todayDate + "T12:00:00Z");
   const cells: HeatmapCell[] = [];
