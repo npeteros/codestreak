@@ -19,7 +19,11 @@ import {
   buildStudentHeatmap,
   buildClassHeatmap,
 } from "./instructor.calc";
-import OpenAI from "openai";
+import {
+  generateChallengeDrafts,
+  type AiChallengeDraft,
+} from "@/lib/services/openai/challengeGeneration";
+
 
 const AT_RISK_DAYS = 3;
 const HEATMAP_WEEKS = 26;
@@ -111,14 +115,6 @@ export type CourseSettings = {
   streakRules: { challenge: boolean; checkin: boolean; sprintCard: boolean };
   isArchived: boolean;
   isPublic: boolean;
-};
-
-export type AiChallengeDraft = {
-  id: string;
-  title: string;
-  description: string;
-  difficulty: string;
-  starter: string;
 };
 
 // ── Private helpers ──────────────────────────────────────────────────────────
@@ -733,44 +729,9 @@ export async function generateAiChallenges(
   const course = await getCourse(uid, courseId);
   const lang = course?.data.languageTag ?? "Python";
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-  const prompt = `Generate 5 coding challenge ideas for a ${lang} course based on this topic or syllabus excerpt:
-${topic}
-
-Return a JSON object with a "challenges" array. Each challenge has:
-- title: short memorable name (3-5 words)
-- description: 1-2 sentence problem description including constraints and expected output
-- difficulty: one of "EASY", "MEDIUM", or "HARD"
-- starter: 4-6 lines of ${lang} starter code with a function signature and a pass statement
-
-Return ONLY valid JSON. No markdown, no code fences.`;
-
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-      temperature: 0.75,
-      max_tokens: 1500,
-      response_format: { type: "json_object" },
-    });
-
-    const raw = completion.choices[0]?.message?.content ?? "{}";
-    const parsed = JSON.parse(raw) as { challenges?: unknown[] };
-    const challenges = (
-      Array.isArray(parsed) ? parsed : (parsed.challenges ?? [])
-    ).slice(0, 5) as AiChallengeDraft[];
-
-    return {
-      success: true,
-      challenges: challenges.map((c, i) => ({
-        id: `ai-${Date.now()}-${i}`,
-        title: String((c as Record<string, unknown>).title ?? "Challenge"),
-        description: String((c as Record<string, unknown>).description ?? ""),
-        difficulty: String((c as Record<string, unknown>).difficulty ?? "MEDIUM"),
-        starter: String((c as Record<string, unknown>).starter ?? ""),
-      })),
-    };
+    const challenges = await generateChallengeDrafts(lang, topic);
+    return { success: true, challenges };
   } catch {
     return { success: false, error: "generation_failed" };
   }

@@ -5,7 +5,7 @@ import {
   createInstructorChallenge,
   generateAiChallenges,
 } from "@/lib/actions/instructor";
-import type { AiChallengeDraft } from "@/lib/actions/instructor";
+import type { AiChallengeDraft } from "@/lib/services/openai/challengeGeneration";
 
 type Mode = "manual" | "ai";
 type Difficulty = "EASY" | "MEDIUM" | "HARD";
