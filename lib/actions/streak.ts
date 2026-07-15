@@ -38,13 +38,13 @@ export async function getStreakData(): Promise<
   const courseId = hub.data.courseId as string;
   const timezone = hub.data.timezone ?? "UTC";
 
-  // Course streakRules
-  const course = await getCourse(courseId);
+  // Course streakRules + all streak entries (independent reads, run in parallel)
+  const [course, entries] = await Promise.all([
+    getCourse(courseId),
+    listStreakEntriesAsc(uid, courseId),
+  ]);
   if (!course) return { success: false, error: "course_not_found" };
   const { streakRules } = course;
-
-  // All streak entries ordered oldest-first
-  const entries = await listStreakEntriesAsc(uid, courseId);
 
   const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
 

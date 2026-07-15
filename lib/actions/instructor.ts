@@ -143,11 +143,12 @@ async function verifyStudentAccess(
   const uid = await verifyInstructor();
   if (!uid) return { ok: false, error: "unauthenticated" };
 
-  const course = await getCourse(uid, courseId);
+  const [course, isEnrolled] = await Promise.all([
+    getCourse(uid, courseId),
+    enrollmentsRepo.isEnrolled(courseId, studentId),
+  ]);
   if (!course) return { ok: false, error: "no_course" };
-
-  if (!(await enrollmentsRepo.isEnrolled(course.id, studentId)))
-    return { ok: false, error: "not_enrolled" };
+  if (!isEnrolled) return { ok: false, error: "not_enrolled" };
 
   return { ok: true, uid, course };
 }
