@@ -1,8 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import dynamic from "next/dynamic";
 import {
   createSprintTask,
   updateSprintTask,
@@ -11,6 +10,8 @@ import {
 } from "@/lib/actions/projects";
 import type { SprintTask } from "@/lib/actions/projects";
 import type { SprintTaskStatus } from "@/lib/firebase/types";
+
+const Markdown = dynamic(() => import("@/components/ui/Markdown"));
 
 const COLUMNS: SprintTaskStatus[] = ["TODO", "IN_PROGRESS", "IN_REVIEW", "DONE"];
 const COLUMN_LABELS: Record<SprintTaskStatus, string> = {
@@ -344,9 +345,7 @@ export function SprintBoardClient({
                     </span>
                     {task.description && (
                       <div className="markdown-body text-[12.5px] text-[#A9A79F] leading-[1.5] line-clamp-3">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {task.description}
-                        </ReactMarkdown>
+                        <Markdown>{task.description}</Markdown>
                       </div>
                     )}
                     {task.dueDate && (
@@ -439,9 +438,7 @@ function TaskDetailModal({
           </span>
         )}
         <div className="markdown-body text-[13.5px] text-[#C2C0B9] leading-[1.6] max-h-[280px] overflow-y-auto bg-code-bg rounded-[9px] p-[13px] border border-white/10">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-            {task.description || "*No description*"}
-          </ReactMarkdown>
+          <Markdown>{task.description || "*No description*"}</Markdown>
         </div>
         <div className="flex justify-end gap-2 mt-1">
           {canManage && (
@@ -522,9 +519,7 @@ function TaskModal({
         </div>
         {preview ? (
           <div className="markdown-body text-[13.5px] text-[#C2C0B9] leading-[1.6] min-h-[110px] max-h-[220px] overflow-y-auto bg-code-bg rounded-[9px] p-[13px] border border-white/10">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {description || "*Nothing to preview*"}
-            </ReactMarkdown>
+            <Markdown>{description || "*Nothing to preview*"}</Markdown>
           </div>
         ) : (
           <textarea

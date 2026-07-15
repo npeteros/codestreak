@@ -3,11 +3,12 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Zap, CircleCheck, BarChart3, BookOpen } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { getOverviewSummary, type OverviewSummary } from "@/lib/actions/overview";
 import type { ChallengeDifficulty, JournalTriggerType } from "@/lib/firebase/types";
+
+const Markdown = dynamic(() => import("@/components/ui/Markdown"));
 
 export interface CourseOption {
   id: string;
@@ -291,9 +292,7 @@ export function StudentOverviewClient({
             {summary?.latestJournal ? (
               <>
                 <div className="markdown-body text-[13.5px] text-text-primary leading-[1.6] italic line-clamp-3">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {summary.latestJournal.content}
-                  </ReactMarkdown>
+                  <Markdown>{summary.latestJournal.content}</Markdown>
                 </div>
                 <div className="font-mono text-[11px] text-text-faint mt-auto">
                   {TRIGGER_LABEL[summary.latestJournal.triggerType]} ·{" "}

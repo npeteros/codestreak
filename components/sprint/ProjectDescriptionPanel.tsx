@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import dynamic from "next/dynamic";
+
+const Markdown = dynamic(() => import("@/components/ui/Markdown"));
 
 interface Props {
   title: string;
@@ -16,7 +17,7 @@ export function ProjectDescriptionPanel({ title, description }: Props) {
     <>
       <div className="flex items-center gap-3 bg-surface border border-white/[0.07] rounded-[12px] px-[14px] py-[10px]">
         <div className="markdown-body flex-1 min-w-0 text-[13.5px] text-[#C2C0B9] leading-[1.5] line-clamp-1">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{description}</ReactMarkdown>
+          <Markdown>{description}</Markdown>
         </div>
         <button
           onClick={() => setOpen(true)}
@@ -39,7 +40,7 @@ export function ProjectDescriptionPanel({ title, description }: Props) {
               {title}
             </h3>
             <div className="markdown-body text-[13.5px] text-[#C2C0B9] leading-[1.6] max-h-[400px] overflow-y-auto">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{description}</ReactMarkdown>
+              <Markdown>{description}</Markdown>
             </div>
             <div className="flex justify-end mt-1">
               <button

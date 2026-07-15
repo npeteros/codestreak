@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import dynamic from "next/dynamic";
 import { Pencil, Archive as ArchiveIcon } from "lucide-react";
 import {
   createProject,
@@ -15,6 +14,8 @@ import type { ProjectScope } from "@/lib/firebase/types";
 import { SprintBoardClient } from "@/components/sprint/SprintBoardClient";
 import { SprintBoardSkeleton } from "@/components/sprint/SprintBoardSkeleton";
 import { ProjectDescriptionPanel } from "@/components/sprint/ProjectDescriptionPanel";
+
+const Markdown = dynamic(() => import("@/components/ui/Markdown"));
 
 const Scope = {
   AllStudents: "ALL_STUDENTS",
@@ -351,9 +352,7 @@ function ProjectFormModal({
         </div>
         {preview ? (
           <div className="markdown-body text-[13.5px] text-[#C2C0B9] leading-[1.6] min-h-[75px] max-h-[220px] overflow-y-auto bg-code-bg rounded-[9px] p-[13px] border border-white/10">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {description || "*Nothing to preview*"}
-            </ReactMarkdown>
+            <Markdown>{description || "*Nothing to preview*"}</Markdown>
           </div>
         ) : (
           <textarea

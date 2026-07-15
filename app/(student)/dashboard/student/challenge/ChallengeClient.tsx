@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import { CheckCircle2 } from "lucide-react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { submitChallenge } from "@/lib/actions/challenges";
+
+const Markdown = dynamic(() => import("@/components/ui/Markdown"));
 
 interface Challenge {
   id: string;
@@ -117,9 +118,7 @@ export function ChallengeClient({
 
           <div className="max-h-90 overflow-y-auto pr-1 -mr-1">
             <div className="markdown-body text-[14.5px] text-[#C2C0B9] leading-[1.7]">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {challenge.description}
-              </ReactMarkdown>
+              <Markdown>{challenge.description}</Markdown>
             </div>
           </div>
         </div>

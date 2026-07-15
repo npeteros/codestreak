@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import dynamic from "next/dynamic";
 import { getStudentDetail, nudgeStudent } from "@/lib/actions/instructor";
 import type { StudentRow, StudentDetail } from "@/lib/actions/instructor";
 import { difficultyBadgeClass, formatShortDate } from "@/lib/format";
+
+const Markdown = dynamic(() => import("@/components/ui/Markdown"));
 
 type SortKey = "name" | "streak" | "lastDays" | "challenges" | "checkins";
 type SortDir = "asc" | "desc";
@@ -201,9 +202,7 @@ function StudentDrawer({ courseId, student, onClose, onNudge, nudging }: DrawerP
                   </span>
                 </div>
                 <div className="markdown-body text-[13.5px] text-[#C2C0B9] leading-[1.6] italic">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {e.content}
-                  </ReactMarkdown>
+                  <Markdown>{e.content}</Markdown>
                 </div>
               </div>
             ))}
