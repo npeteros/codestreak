@@ -45,8 +45,9 @@ export async function countCheckInsSince(
 ): Promise<number> {
   const snap = await checkInsCol(studentId, courseId)
     .where("createdAt", ">=", Timestamp.fromDate(since))
+    .count()
     .get();
-  return snap.size;
+  return snap.data().count;
 }
 
 export async function listRecentCheckIns(

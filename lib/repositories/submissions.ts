@@ -50,13 +50,12 @@ export async function upsertSubmission(
   });
 }
 
-// Full-collection fetch, used only for its .size (matches existing call site).
 export async function countSubmissionsFull(
   studentId: string,
   courseId: string
 ): Promise<number> {
-  const snap = await submissionsCol(studentId, courseId).get();
-  return snap.size;
+  const snap = await submissionsCol(studentId, courseId).count().get();
+  return snap.data().count;
 }
 
 export async function countSubmissions(studentId: string, courseId: string): Promise<number> {

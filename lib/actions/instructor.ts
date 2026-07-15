@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import type { CourseDoc, StreakEntryDoc } from "@/lib/firebase/types";
 import { requireRole } from "@/lib/auth/session";
 import { initials } from "@/lib/format";
-import { getUser } from "@/lib/repositories/users";
+import { getUser, getUsers } from "@/lib/repositories/users";
 import * as coursesRepo from "@/lib/repositories/courses";
 import * as enrollmentsRepo from "@/lib/repositories/enrollments";
 import * as streakEntriesRepo from "@/lib/repositories/streakEntries";
@@ -241,15 +241,17 @@ export async function getClassOverview(courseId: string): Promise<
     };
   }
 
-  const allData = await Promise.all(
-    studentIds.map(async (sid) => {
-      const [user, streakEntries] = await Promise.all([
-        getUser(sid),
-        streakEntriesRepo.listStreakEntriesDesc(sid, course.id, 365),
-      ]);
-      return { sid, user, streakEntries };
-    })
-  );
+  const [usersById, allStreakEntries] = await Promise.all([
+    getUsers(studentIds),
+    Promise.all(
+      studentIds.map((sid) => streakEntriesRepo.listStreakEntriesDesc(sid, course.id, 365))
+    ),
+  ]);
+  const allData = studentIds.map((sid, i) => ({
+    sid,
+    user: usersById.get(sid) ?? null,
+    streakEntries: allStreakEntries[i],
+  }));
 
   let totalStreak = 0;
   let activeToday = 0;
@@ -322,16 +324,18 @@ export async function getRoster(courseId: string): Promise<
   sevenDaysAgo.setUTCDate(sevenDaysAgo.getUTCDate() - 6);
   sevenDaysAgo.setUTCHours(0, 0, 0, 0);
 
+  const usersById = await getUsers(studentIds);
+
   const rows = await Promise.all(
     studentIds.map(async (sid) => {
-      const [user, streakEntries, submissionCount, checkinCount] =
+      const [streakEntries, submissionCount, checkinCount] =
         await Promise.all([
-          getUser(sid),
           streakEntriesRepo.listStreakEntriesDesc(sid, course.id, 365),
           submissionsRepo.countSubmissionsFull(sid, course.id),
           checkinsRepo.countCheckInsSince(sid, course.id, sevenDaysAgo),
         ]);
 
+      const user = usersById.get(sid) ?? null;
       const name = user ? user.name : "Unknown";
       const entryMap = new Map<string, StreakEntryDoc>();
       for (const { id, data } of streakEntries) entryMap.set(id, data);
