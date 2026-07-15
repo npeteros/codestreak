@@ -64,6 +64,7 @@ interface Props {
   currentUserId: string;
   isInstructor: boolean;
   initialTasks: SprintTask[];
+  studentId?: string;
 }
 
 export function SprintBoardClient({
@@ -72,6 +73,7 @@ export function SprintBoardClient({
   currentUserId,
   isInstructor,
   initialTasks,
+  studentId,
 }: Props) {
   const [board, setBoard] = useState<Board>(() => groupTasks(initialTasks));
   const [overCol, setOverCol] = useState<SprintTaskStatus | null>(null);
@@ -132,9 +134,13 @@ export function SprintBoardClient({
     setDraggingId(null);
     if (!d) return;
     moveLocally(d.id, d.from, to, null);
-    moveSprintTask(courseId, projectId, d.id, { status: to, insertBeforeId: null }).catch(
-      (err) => console.error("[sprint] moveSprintTask failed:", err)
-    );
+    moveSprintTask(
+      courseId,
+      projectId,
+      d.id,
+      { status: to, insertBeforeId: null },
+      studentId
+    ).catch((err) => console.error("[sprint] moveSprintTask failed:", err));
   }
 
   function onCardDrop(e: React.DragEvent, to: SprintTaskStatus, beforeId: string) {
@@ -146,10 +152,13 @@ export function SprintBoardClient({
     setDraggingId(null);
     if (!d || d.id === beforeId) return;
     moveLocally(d.id, d.from, to, beforeId);
-    moveSprintTask(courseId, projectId, d.id, {
-      status: to,
-      insertBeforeId: beforeId,
-    }).catch((err) => console.error("[sprint] moveSprintTask failed:", err));
+    moveSprintTask(
+      courseId,
+      projectId,
+      d.id,
+      { status: to, insertBeforeId: beforeId },
+      studentId
+    ).catch((err) => console.error("[sprint] moveSprintTask failed:", err));
   }
 
   function handleDelete(task: SprintTask) {
@@ -158,7 +167,7 @@ export function SprintBoardClient({
       [task.status]: b[task.status].filter((t) => t.id !== task.id),
     }));
     startTransition(async () => {
-      const res = await deleteSprintTask(courseId, projectId, task.id);
+      const res = await deleteSprintTask(courseId, projectId, task.id, studentId);
       if (!res.success) {
         setBoard((b) => ({ ...b, [task.status]: [...b[task.status], task] }));
       }
@@ -191,11 +200,17 @@ export function SprintBoardClient({
         };
       });
       startTransition(async () => {
-        await updateSprintTask(courseId, projectId, id, {
-          title: input.title,
-          description: input.description,
-          dueDate: input.dueDate || null,
-        });
+        await updateSprintTask(
+          courseId,
+          projectId,
+          id,
+          {
+            title: input.title,
+            description: input.description,
+            dueDate: input.dueDate || null,
+          },
+          studentId
+        );
       });
     } else {
       const tempId = "temp_" + Date.now();
@@ -211,11 +226,16 @@ export function SprintBoardClient({
       };
       setBoard((b) => ({ ...b, TODO: [...b.TODO, temp] }));
       startTransition(async () => {
-        const res = await createSprintTask(courseId, projectId, {
-          title: input.title,
-          description: input.description,
-          dueDate: input.dueDate || undefined,
-        });
+        const res = await createSprintTask(
+          courseId,
+          projectId,
+          {
+            title: input.title,
+            description: input.description,
+            dueDate: input.dueDate || undefined,
+          },
+          studentId
+        );
         if (res.success && res.id) {
           const newId = res.id;
           setBoard((b) => ({

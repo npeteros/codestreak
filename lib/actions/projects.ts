@@ -32,9 +32,10 @@ export type SprintTask = {
 
 async function verifyProjectAccess(
   courseId: string,
-  projectId: string
+  projectId: string,
+  requestedStudentId?: string
 ): Promise<
-  | { ok: true; uid: string; role: UserRole; project: ProjectDoc }
+  | { ok: true; uid: string; role: UserRole; project: ProjectDoc; boardStudentId: string }
   | { ok: false; error: string }
 > {
   const user = await getCurrentUser();
@@ -47,7 +48,13 @@ async function verifyProjectAccess(
   if (role === "INSTRUCTOR") {
     const course = await getCourseOwnedByInstructor(uid, courseId);
     if (!course) return { ok: false, error: "forbidden" };
-    return { ok: true, uid, role, project };
+    if (!requestedStudentId) return { ok: false, error: "student_required" };
+    const isMember =
+      project.scope === "ALL_STUDENTS"
+        ? await isEnrolled(courseId, requestedStudentId)
+        : (project.studentIds ?? []).includes(requestedStudentId);
+    if (!isMember) return { ok: false, error: "forbidden" };
+    return { ok: true, uid, role, project, boardStudentId: requestedStudentId };
   }
 
   if (!(await isEnrolled(courseId, uid))) return { ok: false, error: "forbidden" };
@@ -55,7 +62,7 @@ async function verifyProjectAccess(
     project.scope === "ALL_STUDENTS" ||
     (project.scope === "STUDENTS" && (project.studentIds ?? []).includes(uid));
   if (!hasAccess) return { ok: false, error: "forbidden" };
-  return { ok: true, uid, role, project };
+  return { ok: true, uid, role, project, boardStudentId: uid };
 }
 
 // ── Serialization ─────────────────────────────────────────────────────────
@@ -214,12 +221,13 @@ export async function toggleProjectArchive(
 
 export async function getSprintTasks(
   courseId: string,
-  projectId: string
+  projectId: string,
+  studentId?: string
 ): Promise<{ success: true; tasks: SprintTask[] } | { success: false; error: string }> {
-  const access = await verifyProjectAccess(courseId, projectId);
+  const access = await verifyProjectAccess(courseId, projectId, studentId);
   if (!access.ok) return { success: false, error: access.error };
 
-  const all = await projectsRepo.listAllTasks(courseId, projectId);
+  const all = await projectsRepo.listAllTasks(courseId, projectId, access.boardStudentId);
   const tasks = all
     .map(({ id, data }) => serializeTask(id, data))
     .sort((a, b) => a.order - b.order);
@@ -229,18 +237,19 @@ export async function getSprintTasks(
 export async function createSprintTask(
   courseId: string,
   projectId: string,
-  data: { title: string; description?: string; dueDate?: string }
+  data: { title: string; description?: string; dueDate?: string },
+  studentId?: string
 ): Promise<{ success: boolean; id?: string; error?: string }> {
-  const access = await verifyProjectAccess(courseId, projectId);
+  const access = await verifyProjectAccess(courseId, projectId, studentId);
   if (!access.ok) return { success: false, error: access.error };
 
-  const all = await projectsRepo.listAllTasks(courseId, projectId);
+  const all = await projectsRepo.listAllTasks(courseId, projectId, access.boardStudentId);
   const inTodo = all.filter((t) => t.data.status === "TODO");
   const order = inTodo.length
     ? Math.max(...inTodo.map((t) => t.data.order)) + 1000
     : 1000;
 
-  const id = await projectsRepo.createTask(courseId, projectId, {
+  const id = await projectsRepo.createTask(courseId, projectId, access.boardStudentId, {
     title: data.title,
     description: data.description ?? "",
     dueDate: data.dueDate ? new Date(data.dueDate + "T12:00:00Z") : null,
@@ -256,12 +265,13 @@ export async function updateSprintTask(
   courseId: string,
   projectId: string,
   taskId: string,
-  data: { title?: string; description?: string; dueDate?: string | null }
+  data: { title?: string; description?: string; dueDate?: string | null },
+  studentId?: string
 ): Promise<{ success: boolean; error?: string }> {
-  const access = await verifyProjectAccess(courseId, projectId);
+  const access = await verifyProjectAccess(courseId, projectId, studentId);
   if (!access.ok) return { success: false, error: access.error };
 
-  const task = await projectsRepo.getTask(courseId, projectId, taskId);
+  const task = await projectsRepo.getTask(courseId, projectId, access.boardStudentId, taskId);
   if (!task) return { success: false, error: "not_found" };
 
   const canManage = access.role === "INSTRUCTOR" || task.createdBy === access.uid;
@@ -274,25 +284,26 @@ export async function updateSprintTask(
     update.dueDate = data.dueDate ? new Date(data.dueDate + "T12:00:00Z") : null;
   }
 
-  await projectsRepo.updateTask(courseId, projectId, taskId, update);
+  await projectsRepo.updateTask(courseId, projectId, access.boardStudentId, taskId, update);
   return { success: true };
 }
 
 export async function deleteSprintTask(
   courseId: string,
   projectId: string,
-  taskId: string
+  taskId: string,
+  studentId?: string
 ): Promise<{ success: boolean; error?: string }> {
-  const access = await verifyProjectAccess(courseId, projectId);
+  const access = await verifyProjectAccess(courseId, projectId, studentId);
   if (!access.ok) return { success: false, error: access.error };
 
-  const task = await projectsRepo.getTask(courseId, projectId, taskId);
+  const task = await projectsRepo.getTask(courseId, projectId, access.boardStudentId, taskId);
   if (!task) return { success: false, error: "not_found" };
 
   const canManage = access.role === "INSTRUCTOR" || task.createdBy === access.uid;
   if (!canManage) return { success: false, error: "forbidden" };
 
-  await projectsRepo.deleteTask(courseId, projectId, taskId);
+  await projectsRepo.deleteTask(courseId, projectId, access.boardStudentId, taskId);
   return { success: true };
 }
 
@@ -300,15 +311,16 @@ export async function moveSprintTask(
   courseId: string,
   projectId: string,
   taskId: string,
-  data: { status: SprintTaskStatus; insertBeforeId?: string | null }
+  data: { status: SprintTaskStatus; insertBeforeId?: string | null },
+  studentId?: string
 ): Promise<{ success: boolean; error?: string }> {
-  const access = await verifyProjectAccess(courseId, projectId);
+  const access = await verifyProjectAccess(courseId, projectId, studentId);
   if (!access.ok) return { success: false, error: access.error };
 
-  const task = await projectsRepo.getTask(courseId, projectId, taskId);
+  const task = await projectsRepo.getTask(courseId, projectId, access.boardStudentId, taskId);
   if (!task) return { success: false, error: "not_found" };
 
-  const all = await projectsRepo.listAllTasks(courseId, projectId);
+  const all = await projectsRepo.listAllTasks(courseId, projectId, access.boardStudentId);
   const destCol = all
     .filter((t) => t.id !== taskId && t.data.status === data.status)
     .sort((a, b) => a.data.order - b.data.order);
@@ -327,7 +339,7 @@ export async function moveSprintTask(
     order = (before + after) / 2;
   }
 
-  await projectsRepo.moveTask(courseId, projectId, taskId, data.status, order);
+  await projectsRepo.moveTask(courseId, projectId, access.boardStudentId, taskId, data.status, order);
 
   const justCompleted = data.status === "DONE" && task.status !== "DONE";
   if (justCompleted && access.role === "STUDENT") {

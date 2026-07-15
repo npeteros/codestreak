@@ -113,7 +113,7 @@ export interface ProjectDoc {
 
 export type SprintTaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
 
-// /courses/{courseId}/projects/{projectId}/tasks/{taskId}
+// /courses/{courseId}/projects/{projectId}/studentBoards/{studentId}/tasks/{taskId}
 export interface SprintTaskDoc {
   title: string;
   description: string; // markdown source

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Pencil, Archive as ArchiveIcon, Users } from "lucide-react";
+import { Pencil, Archive as ArchiveIcon } from "lucide-react";
 import {
   createProject,
   updateProject,
@@ -53,20 +53,34 @@ export function ProjectsSprintClient({
   const [selectedId, setSelectedId] = useState<string | null>(
     initialProjects[0]?.id ?? null
   );
+  const [studentOverrideId, setStudentOverrideId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<SprintTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [formState, setFormState] = useState<ProjectFormState>(null);
-  const [membersPanelId, setMembersPanelId] = useState<string | null>(null);
   const [, startTransition] = useTransition();
 
+  const selected = projects.find((p) => p.id === selectedId) ?? null;
+
+  const boardMembers = useMemo(() => {
+    if (!selected) return [];
+    return selected.scope === Scope.Students
+      ? students.filter((s) => selected.studentIds.includes(s.id))
+      : students;
+  }, [selected, students]);
+
+  const selectedStudentId =
+    studentOverrideId && boardMembers.some((m) => m.id === studentOverrideId)
+      ? studentOverrideId
+      : boardMembers[0]?.id ?? null;
+
   useEffect(() => {
-    if (!selectedId) {
+    if (!selectedId || !selectedStudentId) {
       setTasks([]);
       return;
     }
     let cancelled = false;
     setLoadingTasks(true);
-    getSprintTasks(courseId, selectedId).then((res) => {
+    getSprintTasks(courseId, selectedId, selectedStudentId).then((res) => {
       if (cancelled) return;
       setTasks(res.success ? res.tasks : []);
       setLoadingTasks(false);
@@ -74,7 +88,7 @@ export function ProjectsSprintClient({
     return () => {
       cancelled = true;
     };
-  }, [courseId, selectedId]);
+  }, [courseId, selectedId, selectedStudentId]);
 
   function handleCreated(project: Project) {
     setProjects((p) => [...p, project].sort((a, b) => a.name.localeCompare(b.name)));
@@ -105,8 +119,6 @@ export function ProjectsSprintClient({
       }
     });
   }
-
-  const selected = projects.find((p) => p.id === selectedId) ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -142,77 +154,41 @@ export function ProjectsSprintClient({
                 ? "text-bg/60 hover:text-bg hover:bg-black/10"
                 : "text-text-faint hover:text-text-primary hover:bg-white/10";
               return (
-                <div key={p.id} className="relative">
-                  <div
-                    className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.25 rounded-lg font-sans text-[13px] cursor-pointer"
-                    style={
-                      isSelected
-                        ? { background: "#F5C842", color: "#0B0B0D", fontWeight: 600 }
-                        : { background: "transparent", color: "#8C8A83" }
-                    }
-                    onClick={() => setSelectedId(p.id)}
-                  >
-                    <span>{p.name}</span>
-                    {p.scope === Scope.Students && (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-1.5 pl-3 pr-1.5 py-1.25 rounded-lg font-sans text-[13px] cursor-pointer"
+                  style={
+                    isSelected
+                      ? { background: "#F5C842", color: "#0B0B0D", fontWeight: 600 }
+                      : { background: "transparent", color: "#8C8A83" }
+                  }
+                  onClick={() => setSelectedId(p.id)}
+                >
+                  <span>{p.name}</span>
+                  {isSelected && (
+                    <>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          setMembersPanelId(membersPanelId === p.id ? null : p.id);
+                          setFormState({ mode: ProjectFormMode.Edit, project: p });
                         }}
-                        title="View members"
-                        aria-label="View members"
+                        title="Edit project"
+                        aria-label="Edit project"
                         className={`bg-transparent border-none cursor-pointer p-1 rounded-md flex items-center ${iconColorClass}`}
                       >
-                        <Users size={13} />
+                        <Pencil size={13} />
                       </button>
-                    )}
-                    {isSelected && (
-                      <>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setFormState({ mode: ProjectFormMode.Edit, project: p });
-                          }}
-                          title="Edit project"
-                          aria-label="Edit project"
-                          className={`bg-transparent border-none cursor-pointer p-1 rounded-md flex items-center ${iconColorClass}`}
-                        >
-                          <Pencil size={13} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleArchive(p.id);
-                          }}
-                          title="Archive project"
-                          aria-label="Archive project"
-                          className="bg-transparent border-none cursor-pointer p-1 rounded-md flex items-center text-bg/60 hover:text-red-700 hover:bg-black/10"
-                        >
-                          <ArchiveIcon size={13} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                  {membersPanelId === p.id && (
-                    <>
-                      <div
-                        className="fixed inset-0 z-10"
-                        onClick={() => setMembersPanelId(null)}
-                      />
-                      <div className="absolute z-20 top-full left-0 mt-1 min-w-[180px] bg-[#17171b] border border-white/10 rounded-[9px] p-2.5 flex flex-col gap-1 shadow-lg">
-                        <p className="text-text-faint text-[11px] font-semibold uppercase tracking-wide m-0 mb-0.5">
-                          Members
-                        </p>
-                        {p.studentIds.length === 0 ? (
-                          <p className="text-text-faint text-[12.5px] m-0">No students assigned</p>
-                        ) : (
-                          p.studentIds.map((id) => (
-                            <p key={id} className="text-text-primary text-[12.5px] m-0">
-                              {students.find((s) => s.id === id)?.name ?? "student"}
-                            </p>
-                          ))
-                        )}
-                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleArchive(p.id);
+                        }}
+                        title="Archive project"
+                        aria-label="Archive project"
+                        className="bg-transparent border-none cursor-pointer p-1 rounded-md flex items-center text-bg/60 hover:text-red-700 hover:bg-black/10"
+                      >
+                        <ArchiveIcon size={13} />
+                      </button>
                     </>
                   )}
                 </div>
@@ -220,18 +196,38 @@ export function ProjectsSprintClient({
             })}
           </div>
 
+          {selected && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] text-text-faint font-mono uppercase tracking-wide">
+                Viewing progress for
+              </span>
+              {boardMembers.length === 0 ? (
+                <span className="text-text-faint text-[12.5px]">
+                  No students assigned to this project yet
+                </span>
+              ) : (
+                <StudentNavCombobox
+                  students={boardMembers}
+                  selectedId={selectedStudentId}
+                  onSelect={setStudentOverrideId}
+                />
+              )}
+            </div>
+          )}
+
           {selected?.description && (
             <ProjectDescriptionPanel title={selected.name} description={selected.description} />
           )}
 
-          {selected && !loadingTasks && (
+          {selected && selectedStudentId && !loadingTasks && (
             <SprintBoardClient
-              key={selected.id}
+              key={`${selected.id}:${selectedStudentId}`}
               courseId={courseId}
               projectId={selected.id}
               currentUserId={currentUserId}
               isInstructor
               initialTasks={tasks}
+              studentId={selectedStudentId}
             />
           )}
           {loadingTasks && <SprintBoardSkeleton />}
@@ -410,6 +406,72 @@ function ProjectFormModal({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function StudentNavCombobox({
+  students,
+  selectedId,
+  onSelect,
+}: {
+  students: StudentOption[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+
+  const selected = students.find((s) => s.id === selectedId) ?? null;
+  const options = students.filter((s) =>
+    s.name.toLowerCase().includes(query.trim().toLowerCase())
+  );
+
+  function select(id: string) {
+    onSelect(id);
+    setQuery("");
+    setOpen(false);
+  }
+
+  return (
+    <div className="relative w-full max-w-[240px]">
+      <input
+        value={open ? query : (selected?.name ?? "")}
+        onChange={(e) => setQuery(e.target.value)}
+        onFocus={(e) => {
+          setQuery("");
+          setOpen(true);
+          e.target.select();
+        }}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        placeholder="Search students…"
+        className="bg-code-bg text-text-primary border border-white/10 rounded-[9px] px-[13px] py-[7px] font-sans text-[13px] outline-none w-full placeholder:text-text-faint"
+      />
+      {open && (
+        <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-[#17171b] border border-white/10 rounded-[9px] max-h-[220px] overflow-y-auto">
+          {options.length === 0 ? (
+            <div className="px-[13px] py-[9px] font-sans text-[13px] text-text-faint">
+              No matching students
+            </div>
+          ) : (
+            options.map((s) => (
+              <button
+                key={s.id}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => select(s.id)}
+                className="block w-full text-left px-[13px] py-[9px] font-sans text-[13.5px] bg-transparent border-none cursor-pointer hover:bg-white/[0.06]"
+                style={
+                  s.id === selectedId
+                    ? { color: "#F5C842", fontWeight: 600 }
+                    : { color: "#E4E2DB" }
+                }
+              >
+                {s.name}
+              </button>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }

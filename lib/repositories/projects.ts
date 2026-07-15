@@ -6,8 +6,12 @@ function projectsCol(courseId: string) {
   return adminDb.collection("courses").doc(courseId).collection("projects");
 }
 
-function tasksCol(courseId: string, projectId: string) {
-  return projectsCol(courseId).doc(projectId).collection("tasks");
+function tasksCol(courseId: string, projectId: string, studentId: string) {
+  return projectsCol(courseId)
+    .doc(projectId)
+    .collection("studentBoards")
+    .doc(studentId)
+    .collection("tasks");
 }
 
 export async function getProject(
@@ -76,24 +80,27 @@ export async function setProjectArchived(
 
 export async function listAllTasks(
   courseId: string,
-  projectId: string
+  projectId: string,
+  studentId: string
 ): Promise<Array<{ id: string; data: SprintTaskDoc }>> {
-  const snap = await tasksCol(courseId, projectId).get();
+  const snap = await tasksCol(courseId, projectId, studentId).get();
   return snap.docs.map((d) => ({ id: d.id, data: d.data() as SprintTaskDoc }));
 }
 
 export async function getTask(
   courseId: string,
   projectId: string,
+  studentId: string,
   taskId: string
 ): Promise<SprintTaskDoc | null> {
-  const snap = await tasksCol(courseId, projectId).doc(taskId).get();
+  const snap = await tasksCol(courseId, projectId, studentId).doc(taskId).get();
   return snap.exists ? (snap.data() as SprintTaskDoc) : null;
 }
 
 export async function createTask(
   courseId: string,
   projectId: string,
+  studentId: string,
   data: {
     title: string;
     description: string;
@@ -104,7 +111,7 @@ export async function createTask(
   }
 ): Promise<string> {
   const now = FieldValue.serverTimestamp();
-  const ref = await tasksCol(courseId, projectId).add({
+  const ref = await tasksCol(courseId, projectId, studentId).add({
     title: data.title,
     description: data.description,
     dueDate: data.dueDate ? Timestamp.fromDate(data.dueDate) : null,
@@ -121,10 +128,11 @@ export async function createTask(
 export async function updateTask(
   courseId: string,
   projectId: string,
+  studentId: string,
   taskId: string,
   update: Record<string, unknown>
 ): Promise<void> {
-  await tasksCol(courseId, projectId)
+  await tasksCol(courseId, projectId, studentId)
     .doc(taskId)
     .update({ ...update, updatedAt: FieldValue.serverTimestamp() });
 }
@@ -132,19 +140,21 @@ export async function updateTask(
 export async function deleteTask(
   courseId: string,
   projectId: string,
+  studentId: string,
   taskId: string
 ): Promise<void> {
-  await tasksCol(courseId, projectId).doc(taskId).delete();
+  await tasksCol(courseId, projectId, studentId).doc(taskId).delete();
 }
 
 export async function moveTask(
   courseId: string,
   projectId: string,
+  studentId: string,
   taskId: string,
   status: SprintTaskStatus,
   order: number
 ): Promise<void> {
-  await tasksCol(courseId, projectId).doc(taskId).update({
+  await tasksCol(courseId, projectId, studentId).doc(taskId).update({
     status,
     order,
     updatedAt: FieldValue.serverTimestamp(),
