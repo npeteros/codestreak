@@ -11,6 +11,7 @@ import {
 } from "@/lib/actions/instructor";
 import type { CourseSettings } from "@/lib/actions/instructor";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { useToast } from "@/lib/hooks/useToast";
 
 const LANGUAGES = ["Python", "JavaScript", "Java", "C", "Go", "Rust", "TypeScript"];
 const TIMEZONES = [
@@ -80,15 +81,10 @@ export function SettingsClient({ settings }: Props) {
   const [isPublic, setIsPublic] = useState(settings.isPublic);
   const [codeCopied, setCodeCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const { toast, showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [archiveDialogOpen, setArchiveDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2200);
-  }
 
   function handleSaveCourse() {
     startTransition(async () => {

@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import { getStudentDetail, nudgeStudent } from "@/lib/actions/instructor";
 import type { StudentRow, StudentDetail } from "@/lib/actions/instructor";
 import { difficultyBadgeClass, formatShortDate } from "@/lib/format";
+import { useToast } from "@/lib/hooks/useToast";
 
 const Markdown = dynamic(() => import("@/components/ui/Markdown"));
 
@@ -332,12 +333,7 @@ export function StudentsClient({ courseId, initialRows }: Props) {
   const [selected, setSelected] = useState<StudentDetail | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [nudging, setNudging] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2200);
-  }
+  const { toast, showToast } = useToast();
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {

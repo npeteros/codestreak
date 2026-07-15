@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { joinPublicCourse } from "@/lib/actions/courses";
 import { BookOpen, Users } from "lucide-react";
+import { useToast } from "@/lib/hooks/useToast";
 
 interface Course {
   id: string;
@@ -21,13 +22,8 @@ export function PublicCoursesClient({ initialCourses }: Props) {
   const router = useRouter();
   const [courses, setCourses] = useState(initialCourses);
   const [joiningId, setJoiningId] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
+  const { toast, showToast } = useToast();
   const [isPending, startTransition] = useTransition();
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2200);
-  }
 
   function handleJoin(courseId: string) {
     setJoiningId(courseId);

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createCourse } from "@/lib/actions/courses";
 import { BookOpen, Plus, ChevronRight } from "lucide-react";
+import { useToast } from "@/lib/hooks/useToast";
 
 const LANGUAGES = ["Python", "JavaScript", "TypeScript", "Java", "C", "Go", "Rust"];
 const TIMEZONES = [
@@ -42,13 +43,8 @@ export function CoursesHomeClient({ initialCourses, startWithForm }: Props) {
   const [description, setDescription] = useState("");
   const [language, setLanguage] = useState("Python");
   const [timezone, setTimezone] = useState("America/New_York");
-  const [toast, setToast] = useState<string | null>(null);
+  const { toast, showToast } = useToast();
   const [isPending, startTransition] = useTransition();
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2200);
-  }
 
   function handleCreate() {
     if (!name.trim()) { showToast("Course name is required"); return; }

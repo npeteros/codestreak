@@ -6,6 +6,7 @@ import {
   generateAiChallenges,
 } from "@/lib/actions/instructor";
 import type { AiChallengeDraft } from "@/lib/services/openai/challengeGeneration";
+import { useToast } from "@/lib/hooks/useToast";
 
 type Mode = "manual" | "ai";
 type Difficulty = "EASY" | "MEDIUM" | "HARD";
@@ -76,7 +77,7 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
   const [aiTopic, setAiTopic] = useState("");
   const [aiDrafts, setAiDrafts] = useState<(AiChallengeDraft & { selected: boolean })[]>([]);
   const [generated, setGenerated] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const { toast, showToast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [isGenerating, setIsGenerating] = useState(false);
   const [editingDraft, setEditingDraft] = useState<{
@@ -88,11 +89,6 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
     schedDate: string;
   } | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2200);
-  }
 
   function toggleDraft(id: string) {
     setAiDrafts((ds) =>

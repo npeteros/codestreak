@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { nudgeStudent } from "@/lib/actions/instructor";
 import type { AtRiskStudent } from "@/lib/actions/instructor";
+import { useToast } from "@/lib/hooks/useToast";
 
 function lastText(days: number): string {
   if (days === 0) return "today";
@@ -16,13 +17,8 @@ interface Props {
 }
 
 export function AtRiskSection({ courseId, students }: Props) {
-  const [toast, setToast] = useState<string | null>(null);
+  const { toast, showToast } = useToast(2100);
   const [nudging, setNudging] = useState<string | null>(null);
-
-  function showToast(msg: string) {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2100);
-  }
 
   async function handleNudge(studentId: string, name: string) {
     setNudging(studentId);
