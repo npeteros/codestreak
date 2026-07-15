@@ -25,26 +25,30 @@ export interface StreakData {
 
 // ── Existing getStreakData() ──────────────────────────────────────────────────
 
-export async function getStreakData(): Promise<
+export async function getStreakData(
+  courseId?: string
+): Promise<
   { success: true; data: StreakData } | { success: false; error: string }
 > {
   const uid = await getUid();
   if (!uid) return { success: false, error: "unauthenticated" };
 
-  // Pick first enrolled course (hub doc lives at /students/{uid}/courses/{courseId})
-  const hub = await getFirstEnrolledCourse(uid);
-  if (!hub) return { success: false, error: "no_courses" };
-
-  const courseId = hub.data.courseId as string;
-  const timezone = hub.data.timezone ?? "UTC";
+  // No course specified — fall back to first enrolled course (hub doc lives
+  // at /students/{uid}/courses/{courseId})
+  let resolvedCourseId = courseId;
+  if (!resolvedCourseId) {
+    const hub = await getFirstEnrolledCourse(uid);
+    if (!hub) return { success: false, error: "no_courses" };
+    resolvedCourseId = hub.data.courseId as string;
+  }
 
   // Course streakRules + all streak entries (independent reads, run in parallel)
   const [course, entries] = await Promise.all([
-    getCourse(courseId),
-    listStreakEntriesAsc(uid, courseId),
+    getCourse(resolvedCourseId),
+    listStreakEntriesAsc(uid, resolvedCourseId),
   ]);
   if (!course) return { success: false, error: "course_not_found" };
-  const { streakRules } = course;
+  const { streakRules, timezone } = course;
 
   const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
 
