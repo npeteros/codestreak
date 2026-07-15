@@ -1,9 +1,7 @@
 "use server";
 
-import { FieldValue } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import type { JournalEntryDoc } from "@/lib/firebase/types";
 import { getUid } from "@/lib/auth/session";
+import { createJournalEntry, listRecentJournalEntries } from "@/lib/repositories/journal";
 import OpenAI from "openai";
 
 // Keeps token usage/cost bounded and avoids truncating mid-multibyte-char.
@@ -78,42 +76,21 @@ export async function triggerJournalEntry(
   const content = completion.choices[0]?.message?.content?.trim();
   if (!content) return;
 
-  await adminDb
-    .collection("students")
-    .doc(studentId)
-    .collection("courses")
-    .doc(courseId)
-    .collection("journalEntries")
-    .add({
-      content,
-      triggerType: context.triggerType,
-      createdAt: FieldValue.serverTimestamp(),
-    });
+  await createJournalEntry(studentId, courseId, content, context.triggerType);
 }
 
 export async function getJournalEntries(courseId: string) {
   const uid = await getUid();
   if (!uid) return { success: false as const, error: "unauthenticated" as const };
 
-  const snap = await adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .doc(courseId)
-    .collection("journalEntries")
-    .orderBy("createdAt", "desc")
-    .limit(20)
-    .get();
+  const rows = await listRecentJournalEntries(uid, courseId, 20);
 
-  const entries = snap.docs.map((doc) => {
-    const d = doc.data() as JournalEntryDoc;
-    return {
-      id: doc.id,
-      content: d.content,
-      createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
-      triggerType: d.triggerType,
-    };
-  });
+  const entries = rows.map(({ id, data: d }) => ({
+    id,
+    content: d.content,
+    createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
+    triggerType: d.triggerType,
+  }));
 
   return { success: true as const, entries };
 }

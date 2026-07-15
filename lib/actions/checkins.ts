@@ -1,11 +1,10 @@
 "use server";
 
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import type { CourseDoc } from "@/lib/firebase/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
 import { triggerJournalEntry } from "@/lib/actions/journal";
 import { getUid } from "@/lib/auth/session";
+import { getCourse } from "@/lib/repositories/courses";
+import { hasCheckedInInRange, createCheckIn as createCheckInDoc } from "@/lib/repositories/checkins";
 
 // Returns the UTC start-of-day for the current calendar date in the given timezone.
 // Uses Intl to find the UTC offset by comparing UTC noon against its local equivalent.
@@ -54,28 +53,19 @@ export async function createCheckIn(courseId: string, note: string) {
   }
 
   // 2. Get course timezone
-  const courseSnap = await adminDb.collection("courses").doc(courseId).get();
-  if (!courseSnap.exists) {
+  const course = await getCourse(courseId);
+  if (!course) {
     return { success: false as const, error: "course_not_found" as const };
   }
-  const { timezone } = courseSnap.data() as CourseDoc;
+  const { timezone } = course;
 
   // 3. Timezone-aware duplicate check
   const startOfDay = getStartOfDayUTC(timezone);
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
-  const existing = await adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .doc(courseId)
-    .collection("checkIns")
-    .where("createdAt", ">=", Timestamp.fromDate(startOfDay))
-    .where("createdAt", "<", Timestamp.fromDate(endOfDay))
-    .limit(1)
-    .get();
+  const alreadyCheckedIn = await hasCheckedInInRange(uid, courseId, startOfDay, endOfDay);
 
-  if (!existing.empty) {
+  if (alreadyCheckedIn) {
     return {
       success: false as const,
       error: "already_checked_in" as const,
@@ -83,18 +73,7 @@ export async function createCheckIn(courseId: string, note: string) {
   }
 
   // 4. Write check-in
-  const checkInsRef = adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .doc(courseId)
-    .collection("checkIns");
-
-  const docRef = await checkInsRef.add({
-    note,
-    courseId,
-    createdAt: FieldValue.serverTimestamp(),
-  });
+  const checkInId = await createCheckInDoc(uid, courseId, note);
 
   // 5. Fire-and-forget streak activity — do not block the check-in response
   recordStreakActivity({ studentId: uid, courseId, source: "checkin" }).catch(
@@ -110,7 +89,7 @@ export async function createCheckIn(courseId: string, note: string) {
   return {
     success: true as const,
     checkIn: {
-      id: docRef.id,
+      id: checkInId,
       note,
       courseId,
       createdAt: new Date().toISOString(),

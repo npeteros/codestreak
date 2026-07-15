@@ -1,19 +1,23 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import type {
-  UserDoc,
-  CourseDoc,
-  StreakEntryDoc,
-  SprintCardDoc,
-  JournalEntryDoc,
-  ChallengeDoc,
-  ChallengeSubmissionDoc,
-  CheckInDoc,
-} from "@/lib/firebase/types";
+import type { CourseDoc, StreakEntryDoc } from "@/lib/firebase/types";
 import { requireRole } from "@/lib/auth/session";
+import { getUser } from "@/lib/repositories/users";
+import * as coursesRepo from "@/lib/repositories/courses";
+import * as enrollmentsRepo from "@/lib/repositories/enrollments";
+import * as streakEntriesRepo from "@/lib/repositories/streakEntries";
+import * as submissionsRepo from "@/lib/repositories/submissions";
+import * as checkinsRepo from "@/lib/repositories/checkins";
+import * as journalRepo from "@/lib/repositories/journal";
+import * as challengesRepo from "@/lib/repositories/challenges";
+import { listSprintCards } from "@/lib/repositories/sprintCards";
+import {
+  calcStreak,
+  lastActiveDays,
+  buildStudentHeatmap,
+  buildClassHeatmap,
+} from "./instructor.calc";
 import OpenAI from "openai";
 
 const AT_RISK_DAYS = 3;
@@ -127,10 +131,8 @@ async function getCourse(
   uid: string,
   courseId: string
 ): Promise<{ id: string; data: CourseDoc } | null> {
-  const snap = await adminDb.collection("courses").doc(courseId).get();
-  if (!snap.exists) return null;
-  const data = snap.data() as CourseDoc;
-  if (data.instructorId !== uid) return null;
+  const data = await coursesRepo.getCourseOwnedByInstructor(uid, courseId);
+  if (!data) return null;
   return { id: courseId, data };
 }
 
@@ -147,13 +149,8 @@ async function verifyStudentAccess(
   const course = await getCourse(uid, courseId);
   if (!course) return { ok: false, error: "no_course" };
 
-  const enrollmentSnap = await adminDb
-    .collection("courses")
-    .doc(course.id)
-    .collection("enrollments")
-    .doc(studentId)
-    .get();
-  if (!enrollmentSnap.exists) return { ok: false, error: "not_enrolled" };
+  if (!(await enrollmentsRepo.isEnrolled(course.id, studentId)))
+    return { ok: false, error: "not_enrolled" };
 
   return { ok: true, uid, course };
 }
@@ -175,25 +172,18 @@ export async function getInstructorCourses(): Promise<
   const uid = await verifyInstructor();
   if (!uid) return { success: false, error: "unauthenticated" };
 
-  const snap = await adminDb
-    .collection("courses")
-    .where("instructorId", "==", uid)
-    .orderBy("createdAt", "desc")
-    .get();
+  const courses = await coursesRepo.listInstructorCourses(uid);
 
   return {
     success: true,
-    courses: snap.docs.map((d) => {
-      const data = d.data() as CourseDoc;
-      return {
-        id: d.id,
-        name: data.name,
-        description: data.description,
-        languageTag: data.languageTag,
-        isArchived: data.isArchived,
-        inviteCode: data.inviteCode,
-      };
-    }),
+    courses: courses.map(({ id, data }) => ({
+      id,
+      name: data.name,
+      description: data.description,
+      languageTag: data.languageTag,
+      isArchived: data.isArchived,
+      inviteCode: data.inviteCode,
+    })),
   };
 }
 
@@ -206,14 +196,6 @@ function initials(name: string): string {
     .toUpperCase();
 }
 
-import {
-  calcStreak,
-  lastActiveDays,
-  heatmapLevel,
-  buildStudentHeatmap,
-  buildClassHeatmap,
-} from "./instructor.calc";
-
 // ── Server actions ───────────────────────────────────────────────────────────
 
 export async function getInstructorInfo(courseId: string): Promise<{
@@ -224,13 +206,13 @@ export async function getInstructorInfo(courseId: string): Promise<{
   const uid = await verifyInstructor();
   if (!uid) return null;
 
-  const [userSnap, course] = await Promise.all([
-    adminDb.collection("users").doc(uid).get(),
+  const [user, course] = await Promise.all([
+    getUser(uid),
     getCourse(uid, courseId),
   ]);
 
   return {
-    name: userSnap.exists ? (userSnap.data() as UserDoc).name : "Instructor",
+    name: user ? user.name : "Instructor",
     courseName: course ? course.data.name : "",
     courseId: course?.id ?? null,
   };
@@ -245,12 +227,7 @@ export async function getClassOverview(courseId: string): Promise<
   const course = await getCourse(uid, courseId);
   if (!course) return { success: false, error: "no_course" };
 
-  const enrollmentsSnap = await adminDb
-    .collection("courses")
-    .doc(course.id)
-    .collection("enrollments")
-    .get();
-  const studentIds = enrollmentsSnap.docs.map((d) => d.id);
+  const studentIds = await enrollmentsRepo.listEnrolledStudentIds(course.id);
   const totalEnrolled = studentIds.length;
 
   const today = new Date().toLocaleDateString("en-CA", {
@@ -278,19 +255,11 @@ export async function getClassOverview(courseId: string): Promise<
 
   const allData = await Promise.all(
     studentIds.map(async (sid) => {
-      const [userSnap, streakSnap] = await Promise.all([
-        adminDb.collection("users").doc(sid).get(),
-        adminDb
-          .collection("students")
-          .doc(sid)
-          .collection("courses")
-          .doc(course.id)
-          .collection("streakEntries")
-          .orderBy("date", "desc")
-          .limit(365)
-          .get(),
+      const [user, streakEntries] = await Promise.all([
+        getUser(sid),
+        streakEntriesRepo.listStreakEntriesDesc(sid, course.id, 365),
       ]);
-      return { sid, userSnap, streakSnap };
+      return { sid, user, streakEntries };
     })
   );
 
@@ -299,11 +268,10 @@ export async function getClassOverview(courseId: string): Promise<
   const atRiskStudents: AtRiskStudent[] = [];
   const allEntries = new Map<string, Map<string, StreakEntryDoc>>();
 
-  for (const { sid, userSnap, streakSnap } of allData) {
-    const name = userSnap.exists ? (userSnap.data() as UserDoc).name : "Unknown";
+  for (const { sid, user, streakEntries } of allData) {
+    const name = user ? user.name : "Unknown";
     const entryMap = new Map<string, StreakEntryDoc>();
-    for (const doc of streakSnap.docs)
-      entryMap.set(doc.id, doc.data() as StreakEntryDoc);
+    for (const { id, data } of streakEntries) entryMap.set(id, data);
     allEntries.set(sid, entryMap);
 
     const streak = calcStreak(entryMap, today);
@@ -357,12 +325,7 @@ export async function getRoster(courseId: string): Promise<
   const course = await getCourse(uid, courseId);
   if (!course) return { success: false, error: "no_course" };
 
-  const enrollmentsSnap = await adminDb
-    .collection("courses")
-    .doc(course.id)
-    .collection("enrollments")
-    .get();
-  const studentIds = enrollmentsSnap.docs.map((d) => d.id);
+  const studentIds = await enrollmentsRepo.listEnrolledStudentIds(course.id);
 
   const today = new Date().toLocaleDateString("en-CA", {
     timeZone: course.data.timezone,
@@ -373,41 +336,17 @@ export async function getRoster(courseId: string): Promise<
 
   const rows = await Promise.all(
     studentIds.map(async (sid) => {
-      const [userSnap, streakSnap, challengeSnap, checkinSnap] =
+      const [user, streakEntries, submissionCount, checkinCount] =
         await Promise.all([
-          adminDb.collection("users").doc(sid).get(),
-          adminDb
-            .collection("students")
-            .doc(sid)
-            .collection("courses")
-            .doc(course.id)
-            .collection("streakEntries")
-            .orderBy("date", "desc")
-            .limit(365)
-            .get(),
-          adminDb
-            .collection("students")
-            .doc(sid)
-            .collection("courses")
-            .doc(course.id)
-            .collection("challengeSubmissions")
-            .get(),
-          adminDb
-            .collection("students")
-            .doc(sid)
-            .collection("courses")
-            .doc(course.id)
-            .collection("checkIns")
-            .where("createdAt", ">=", Timestamp.fromDate(sevenDaysAgo))
-            .get(),
+          getUser(sid),
+          streakEntriesRepo.listStreakEntriesDesc(sid, course.id, 365),
+          submissionsRepo.countSubmissionsFull(sid, course.id),
+          checkinsRepo.countCheckInsSince(sid, course.id, sevenDaysAgo),
         ]);
 
-      const name = userSnap.exists
-        ? (userSnap.data() as UserDoc).name
-        : "Unknown";
+      const name = user ? user.name : "Unknown";
       const entryMap = new Map<string, StreakEntryDoc>();
-      for (const doc of streakSnap.docs)
-        entryMap.set(doc.id, doc.data() as StreakEntryDoc);
+      for (const { id, data } of streakEntries) entryMap.set(id, data);
 
       const streak = calcStreak(entryMap, today);
       const days = lastActiveDays(entryMap);
@@ -418,8 +357,8 @@ export async function getRoster(courseId: string): Promise<
         initials: initials(name),
         streak,
         lastDays: days,
-        challenges: challengeSnap.size,
-        checkinsThisWeek: checkinSnap.size,
+        challenges: submissionCount,
+        checkinsThisWeek: checkinCount,
         isAtRisk: days >= AT_RISK_DAYS,
       } satisfies StudentRow;
     })
@@ -438,102 +377,57 @@ export async function getStudentDetail(
   if (!access.ok) return { success: false, error: access.error };
   const { course } = access;
 
-  const submissionsRef = adminDb
-    .collection("students")
-    .doc(studentId)
-    .collection("courses")
-    .doc(course.id)
-    .collection("challengeSubmissions");
-  const checkInsRef = adminDb
-    .collection("students")
-    .doc(studentId)
-    .collection("courses")
-    .doc(course.id)
-    .collection("checkIns");
-
   const [
-    userSnap,
-    streakSnap,
-    sprintSnap,
-    journalSnap,
-    challengeSnap,
-    challengeCountSnap,
-    checkInSnap,
-    checkInCountSnap,
-    courseChallengesSnap,
+    user,
+    streakEntries,
+    sprintCards,
+    recentJournalRows,
+    recentSubmissions,
+    submissionCount,
+    recentCheckIns,
+    checkInCount,
+    courseChallenges,
   ] = await Promise.all([
-      adminDb.collection("users").doc(studentId).get(),
-      adminDb
-        .collection("students")
-        .doc(studentId)
-        .collection("courses")
-        .doc(course.id)
-        .collection("streakEntries")
-        .orderBy("date", "desc")
-        .limit(84)
-        .get(),
-      adminDb
-        .collection("students")
-        .doc(studentId)
-        .collection("courses")
-        .doc(course.id)
-        .collection("sprintCards")
-        .get(),
-      adminDb
-        .collection("students")
-        .doc(studentId)
-        .collection("courses")
-        .doc(course.id)
-        .collection("journalEntries")
-        .orderBy("createdAt", "desc")
-        .limit(3)
-        .get(),
-      submissionsRef.orderBy("submittedAt", "desc").limit(DRAWER_RECENT_LIMIT).get(),
-      submissionsRef.count().get(),
-      checkInsRef.orderBy("createdAt", "desc").limit(DRAWER_RECENT_LIMIT).get(),
-      checkInsRef.count().get(),
-      adminDb.collection("courses").doc(course.id).collection("challenges").get(),
-    ]);
+    getUser(studentId),
+    streakEntriesRepo.listStreakEntriesDesc(studentId, course.id, 84),
+    listSprintCards(studentId, course.id),
+    journalRepo.listRecentJournalEntries(studentId, course.id, DRAWER_RECENT_LIMIT),
+    submissionsRepo.listRecentSubmissions(studentId, course.id, DRAWER_RECENT_LIMIT),
+    submissionsRepo.countSubmissions(studentId, course.id),
+    checkinsRepo.listRecentCheckIns(studentId, course.id, DRAWER_RECENT_LIMIT),
+    checkinsRepo.countCheckIns(studentId, course.id),
+    challengesRepo.listChallenges(course.id),
+  ]);
 
-  const name = userSnap.exists
-    ? (userSnap.data() as UserDoc).name
-    : "Unknown";
+  const name = user ? user.name : "Unknown";
   const today = new Date().toLocaleDateString("en-CA", {
     timeZone: course.data.timezone,
   });
 
   const entryMap = new Map<string, StreakEntryDoc>();
-  for (const doc of streakSnap.docs)
-    entryMap.set(doc.id, doc.data() as StreakEntryDoc);
+  for (const { id, data } of streakEntries) entryMap.set(id, data);
 
   const streak = calcStreak(entryMap, today);
   const days = lastActiveDays(entryMap);
   const heatmap = buildStudentHeatmap(entryMap, today, 12);
 
-  const sprintCards = sprintSnap.docs.map((d) => d.data() as SprintCardDoc);
   const todo = sprintCards.filter((c) => c.status === "TODO").length;
   const inProgress = sprintCards.filter((c) => c.status === "IN_PROGRESS").length;
   const done = sprintCards.filter((c) => c.status === "DONE").length;
 
-  const recentJournal = journalSnap.docs.map((doc) => {
-    const d = doc.data() as JournalEntryDoc;
-    return {
-      id: doc.id,
-      content: d.content,
-      triggerType: d.triggerType,
-      createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
-    };
-  });
+  const recentJournal = recentJournalRows.map(({ id, data: d }) => ({
+    id,
+    content: d.content,
+    triggerType: d.triggerType,
+    createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
+  }));
 
-  const challengeInfo = new Map<string, ChallengeDoc>();
-  for (const doc of courseChallengesSnap.docs)
-    challengeInfo.set(doc.id, doc.data() as ChallengeDoc);
+  const challengeInfo = new Map(courseChallenges.map(({ id, data }) => [id, data]));
 
-  const challengeSubmissions = challengeSnap.docs.map((doc) => {
-    const d = doc.data() as ChallengeSubmissionDoc;
+  const challengeSubmissions = recentSubmissions.map(({ id, data: d }) => {
     const challenge = challengeInfo.get(d.challengeId);
     return {
-      id: doc.id,
+      id,
       challengeId: d.challengeId,
       challengeTitle: challenge?.title ?? "Deleted challenge",
       difficulty: challenge?.difficulty ?? "MEDIUM",
@@ -542,14 +436,11 @@ export async function getStudentDetail(
     };
   });
 
-  const checkIns = checkInSnap.docs.map((doc) => {
-    const d = doc.data() as CheckInDoc;
-    return {
-      id: doc.id,
-      note: d.note,
-      createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
-    };
-  });
+  const checkIns = recentCheckIns.map(({ id, data: d }) => ({
+    id,
+    note: d.note,
+    createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
+  }));
 
   return {
     success: true,
@@ -558,7 +449,7 @@ export async function getStudentDetail(
       name,
       initials: initials(name),
       streak,
-      challenges: challengeCountSnap.data().count,
+      challenges: submissionCount,
       lastDays: days,
       isAtRisk: days >= AT_RISK_DAYS,
       heatmap,
@@ -566,7 +457,7 @@ export async function getStudentDetail(
       recentJournal,
       challengeSubmissions,
       checkIns,
-      checkInsTotal: checkInCountSnap.data().count,
+      checkInsTotal: checkInCount,
     },
   };
 }
@@ -588,35 +479,28 @@ export async function getStudentSubmissionHistory(
   if (!access.ok) return { success: false, error: access.error };
   const { course } = access;
 
-  const [userSnap, courseChallengesSnap] = await Promise.all([
-    adminDb.collection("users").doc(studentId).get(),
-    adminDb.collection("courses").doc(course.id).collection("challenges").get(),
+  const [user, courseChallenges] = await Promise.all([
+    getUser(studentId),
+    challengesRepo.listChallenges(course.id),
   ]);
-  const studentName = userSnap.exists ? (userSnap.data() as UserDoc).name : "Unknown";
+  const studentName = user ? user.name : "Unknown";
 
-  const challengeInfo = new Map<string, ChallengeDoc>();
-  for (const doc of courseChallengesSnap.docs)
-    challengeInfo.set(doc.id, doc.data() as ChallengeDoc);
+  const challengeInfo = new Map(courseChallenges.map(({ id, data }) => [id, data]));
 
-  let query = adminDb
-    .collection("students")
-    .doc(studentId)
-    .collection("courses")
-    .doc(course.id)
-    .collection("challengeSubmissions")
-    .orderBy("submittedAt", "desc")
-    .limit(HISTORY_PAGE_SIZE + 1);
-  if (cursor) query = query.startAfter(Timestamp.fromDate(new Date(cursor)));
+  const cursorDate = cursor ? new Date(cursor) : null;
+  const rows = await submissionsRepo.listSubmissionsPage(
+    studentId,
+    course.id,
+    HISTORY_PAGE_SIZE + 1,
+    cursorDate
+  );
+  const hasMore = rows.length > HISTORY_PAGE_SIZE;
+  const docs = hasMore ? rows.slice(0, HISTORY_PAGE_SIZE) : rows;
 
-  const snap = await query.get();
-  const hasMore = snap.docs.length > HISTORY_PAGE_SIZE;
-  const docs = hasMore ? snap.docs.slice(0, HISTORY_PAGE_SIZE) : snap.docs;
-
-  const items = docs.map((doc) => {
-    const d = doc.data() as ChallengeSubmissionDoc;
+  const items = docs.map(({ id, data: d }) => {
     const challenge = challengeInfo.get(d.challengeId);
     return {
-      id: doc.id,
+      id,
       challengeId: d.challengeId,
       challengeTitle: challenge?.title ?? "Deleted challenge",
       difficulty: challenge?.difficulty ?? "MEDIUM",
@@ -650,31 +534,24 @@ export async function getStudentCheckInHistory(
   if (!access.ok) return { success: false, error: access.error };
   const { course } = access;
 
-  const userSnap = await adminDb.collection("users").doc(studentId).get();
-  const studentName = userSnap.exists ? (userSnap.data() as UserDoc).name : "Unknown";
+  const user = await getUser(studentId);
+  const studentName = user ? user.name : "Unknown";
 
-  let query = adminDb
-    .collection("students")
-    .doc(studentId)
-    .collection("courses")
-    .doc(course.id)
-    .collection("checkIns")
-    .orderBy("createdAt", "desc")
-    .limit(HISTORY_PAGE_SIZE + 1);
-  if (cursor) query = query.startAfter(Timestamp.fromDate(new Date(cursor)));
+  const cursorDate = cursor ? new Date(cursor) : null;
+  const rows = await checkinsRepo.listCheckInsPage(
+    studentId,
+    course.id,
+    HISTORY_PAGE_SIZE + 1,
+    cursorDate
+  );
+  const hasMore = rows.length > HISTORY_PAGE_SIZE;
+  const docs = hasMore ? rows.slice(0, HISTORY_PAGE_SIZE) : rows;
 
-  const snap = await query.get();
-  const hasMore = snap.docs.length > HISTORY_PAGE_SIZE;
-  const docs = hasMore ? snap.docs.slice(0, HISTORY_PAGE_SIZE) : snap.docs;
-
-  const items = docs.map((doc) => {
-    const d = doc.data() as CheckInDoc;
-    return {
-      id: doc.id,
-      note: d.note,
-      createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
-    };
-  });
+  const items = docs.map(({ id, data: d }) => ({
+    id,
+    note: d.note,
+    createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
+  }));
 
   return {
     success: true,
@@ -740,7 +617,7 @@ export async function updateCourseSettings(
   if (data.timezone !== undefined) updates.timezone = data.timezone;
 
   if (Object.keys(updates).length > 0)
-    await adminDb.collection("courses").doc(course.id).update(updates);
+    await coursesRepo.updateCourse(course.id, updates);
 
   return { success: true };
 }
@@ -759,10 +636,7 @@ export async function updateStreakRules(
   const course = await getCourse(uid, courseId);
   if (!course) return { success: false, error: "no_course" };
 
-  await adminDb
-    .collection("courses")
-    .doc(course.id)
-    .update({ streakRules: rules });
+  await coursesRepo.updateCourse(course.id, { streakRules: rules });
 
   return { success: true };
 }
@@ -777,7 +651,7 @@ export async function setCourseVisibility(
   const course = await getCourse(uid, courseId);
   if (!course) return { success: false, error: "no_course" };
 
-  await adminDb.collection("courses").doc(course.id).update({ isPublic });
+  await coursesRepo.updateCourse(course.id, { isPublic });
 
   revalidatePath("/courses");
   return { success: true, isPublic };
@@ -795,7 +669,7 @@ export async function toggleCourseArchive(courseId: string): Promise<{
   if (!course) return { success: false, error: "no_course" };
 
   const next = !course.data.isArchived;
-  await adminDb.collection("courses").doc(course.id).update({ isArchived: next });
+  await coursesRepo.updateCourse(course.id, { isArchived: next });
 
   revalidatePath("/courses");
   return { success: true, isArchived: next };
@@ -810,21 +684,7 @@ export async function deleteCourse(
   const course = await getCourse(uid, courseId);
   if (!course) return { success: false, error: "no_course" };
 
-  const enrollmentsSnap = await adminDb
-    .collection("courses")
-    .doc(courseId)
-    .collection("enrollments")
-    .get();
-
-  await Promise.all(
-    enrollmentsSnap.docs.map((doc) =>
-      adminDb.recursiveDelete(
-        adminDb.collection("students").doc(doc.id).collection("courses").doc(courseId)
-      )
-    )
-  );
-
-  await adminDb.recursiveDelete(adminDb.collection("courses").doc(courseId));
+  await coursesRepo.deleteCourseCascade(courseId);
 
   revalidatePath("/courses");
   return { success: true };
@@ -852,23 +712,18 @@ export async function createInstructorChallenge(
 
   const scheduledDate = new Date(data.scheduledFor + "T12:00:00Z");
 
-  const ref = await adminDb
-    .collection("courses")
-    .doc(course.id)
-    .collection("challenges")
-    .add({
-      title: data.title,
-      description: data.description,
-      difficulty: data.difficulty,
-      topicTag: data.topicTag,
-      starterCode: data.starterCode,
-      scheduledFor: Timestamp.fromDate(scheduledDate),
-      isDraft: data.isDraft,
-      isAiGenerated: false,
-      createdAt: FieldValue.serverTimestamp(),
-    });
+  const id = await challengesRepo.createChallenge(course.id, {
+    title: data.title,
+    description: data.description,
+    difficulty: data.difficulty,
+    topicTag: data.topicTag,
+    starterCode: data.starterCode,
+    scheduledFor: scheduledDate,
+    isDraft: data.isDraft,
+    isAiGenerated: false,
+  });
 
-  return { success: true, id: ref.id };
+  return { success: true, id };
 }
 
 export async function generateAiChallenges(

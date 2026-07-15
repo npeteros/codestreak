@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
-import { adminDb } from "@/lib/firebase/admin";
-import type { UserDoc, CourseDoc } from "@/lib/firebase/types";
 import { requireUidOrRedirect } from "@/lib/auth/session";
+import { getUser } from "@/lib/repositories/users";
+import { getCourse, listInstructorCourses } from "@/lib/repositories/courses";
 import { InstructorNav } from "@/app/(instructor)/_components/InstructorNav";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 import { CourseSwitcher } from "@/app/(instructor)/_components/CourseSwitcher";
@@ -18,26 +18,21 @@ export default async function CourseLayout({
 
   const uid = await requireUidOrRedirect();
 
-  const [userSnap, courseSnap, allCoursesSnap] = await Promise.all([
-    adminDb.collection("users").doc(uid).get(),
-    adminDb.collection("courses").doc(courseId).get(),
-    adminDb
-      .collection("courses")
-      .where("instructorId", "==", uid)
-      .orderBy("createdAt", "desc")
-      .get(),
+  const [user, courseData, allCoursesList] = await Promise.all([
+    getUser(uid),
+    getCourse(courseId),
+    listInstructorCourses(uid),
   ]);
 
-  if (!courseSnap.exists) notFound();
-  const courseData = courseSnap.data() as CourseDoc;
+  if (!courseData) notFound();
   if (courseData.instructorId !== uid) notFound();
 
-  const userName = userSnap.exists ? (userSnap.data() as UserDoc).name : "Instructor";
+  const userName = user ? user.name : "Instructor";
 
-  const allCourses = allCoursesSnap.docs.map((d) => ({
-    id: d.id,
-    name: (d.data() as CourseDoc).name,
-    isArchived: (d.data() as CourseDoc).isArchived,
+  const allCourses = allCoursesList.map(({ id, data }) => ({
+    id,
+    name: data.name,
+    isArchived: data.isArchived,
   }));
 
   return (

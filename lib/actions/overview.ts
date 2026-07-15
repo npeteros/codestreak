@@ -1,19 +1,17 @@
 "use server";
 
-import { Timestamp } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import type {
-  CourseDoc,
-  StreakEntryDoc,
-  SprintCardDoc,
-  JournalEntryDoc,
-  JournalTriggerType,
-  ChallengeDifficulty,
-  ChallengeDoc,
-} from "@/lib/firebase/types";
+import type { Timestamp } from "firebase-admin/firestore";
+import type { StreakEntryDoc, JournalTriggerType, ChallengeDifficulty } from "@/lib/firebase/types";
 import type { StreakData } from "@/lib/actions/streak";
 import { computeOverviewStreakData } from "./overview.calc";
 import { getUid } from "@/lib/auth/session";
+import { getCourse } from "@/lib/repositories/courses";
+import { listStreakEntriesAsc } from "@/lib/repositories/streakEntries";
+import { getScheduledChallenge } from "@/lib/repositories/challenges";
+import { findSubmissionForChallenge } from "@/lib/repositories/submissions";
+import { listRecentCheckIns } from "@/lib/repositories/checkins";
+import { listSprintCards } from "@/lib/repositories/sprintCards";
+import { listRecentJournalEntries } from "@/lib/repositories/journal";
 
 function getStartOfDayUTC(tz: string): Date {
   const now = new Date();
@@ -68,9 +66,9 @@ export async function getOverviewSummary(
   const uid = await getUid();
   if (!uid) return { success: false, error: "unauthenticated" };
 
-  const courseSnap = await adminDb.collection("courses").doc(courseId).get();
-  if (!courseSnap.exists) return { success: false, error: "course_not_found" };
-  const { timezone, streakRules } = courseSnap.data() as CourseDoc;
+  const course = await getCourse(courseId);
+  if (!course) return { success: false, error: "course_not_found" };
+  const { timezone, streakRules } = course;
 
   const todayStr = new Date().toLocaleDateString("en-CA", {
     timeZone: timezone,
@@ -78,42 +76,20 @@ export async function getOverviewSummary(
   const startOfDay = getStartOfDayUTC(timezone);
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
-  const studentCoursePath = adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .doc(courseId);
-
-  const [streakSnap, challengeSnap, checkInSnap, sprintSnap, journalSnap] =
+  const [streakEntries, scheduledChallenge, recentCheckIns, sprintCards, recentJournal] =
     await Promise.all([
-      studentCoursePath.collection("streakEntries").orderBy("date", "asc").get(),
-      adminDb
-        .collection("courses")
-        .doc(courseId)
-        .collection("challenges")
-        .where("scheduledFor", ">=", Timestamp.fromDate(startOfDay))
-        .where("scheduledFor", "<", Timestamp.fromDate(endOfDay))
-        .where("isDraft", "==", false)
-        .limit(1)
-        .get(),
-      studentCoursePath
-        .collection("checkIns")
-        .orderBy("createdAt", "desc")
-        .limit(1)
-        .get(),
-      studentCoursePath.collection("sprintCards").get(),
-      studentCoursePath
-        .collection("journalEntries")
-        .orderBy("createdAt", "desc")
-        .limit(1)
-        .get(),
+      listStreakEntriesAsc(uid, courseId),
+      getScheduledChallenge(courseId, startOfDay, endOfDay),
+      listRecentCheckIns(uid, courseId, 1),
+      listSprintCards(uid, courseId),
+      listRecentJournalEntries(uid, courseId, 1),
     ]);
 
   // ── Streak computation ───────────────────────────────────────────────────────
 
   const entryMap = new Map<string, StreakEntryDoc>();
-  for (const doc of streakSnap.docs) {
-    entryMap.set(doc.id, doc.data() as StreakEntryDoc);
+  for (const { id, data } of streakEntries) {
+    entryMap.set(id, data);
   }
 
   const streakData = computeOverviewStreakData(entryMap, streakRules, todayStr);
@@ -121,30 +97,28 @@ export async function getOverviewSummary(
   // ── Challenge card ───────────────────────────────────────────────────────────
 
   let challenge: OverviewSummary["challenge"] = null;
-  if (!challengeSnap.empty) {
-    const chalDoc = challengeSnap.docs[0];
-    const chalData = chalDoc.data() as ChallengeDoc;
-    const subSnap = await studentCoursePath
-      .collection("challengeSubmissions")
-      .where("challengeId", "==", chalDoc.id)
-      .limit(1)
-      .get();
+  if (scheduledChallenge) {
+    const submission = await findSubmissionForChallenge(
+      uid,
+      courseId,
+      scheduledChallenge.id
+    );
     challenge = {
-      id: chalDoc.id,
-      title: chalData.title,
-      difficulty: chalData.difficulty,
-      alreadySubmitted: !subSnap.empty,
+      id: scheduledChallenge.id,
+      title: scheduledChallenge.data.title,
+      difficulty: scheduledChallenge.data.difficulty,
+      alreadySubmitted: submission !== null,
     };
   }
 
   // ── Check-in card ────────────────────────────────────────────────────────────
 
   let latestCheckIn: OverviewSummary["latestCheckIn"] = null;
-  if (!checkInSnap.empty) {
-    const d = checkInSnap.docs[0].data();
+  if (recentCheckIns.length > 0) {
+    const d = recentCheckIns[0].data;
     const ts = d.createdAt as Timestamp | null;
     latestCheckIn = {
-      note: d.note as string,
+      note: d.note,
       createdAt: ts ? ts.toDate().toISOString() : new Date().toISOString(),
     };
   }
@@ -154,18 +128,17 @@ export async function getOverviewSummary(
   let todo = 0,
     inProgress = 0,
     done = 0;
-  for (const doc of sprintSnap.docs) {
-    const s = (doc.data() as SprintCardDoc).status;
-    if (s === "TODO") todo++;
-    else if (s === "IN_PROGRESS") inProgress++;
-    else if (s === "DONE") done++;
+  for (const card of sprintCards) {
+    if (card.status === "TODO") todo++;
+    else if (card.status === "IN_PROGRESS") inProgress++;
+    else if (card.status === "DONE") done++;
   }
 
   // ── Journal card ─────────────────────────────────────────────────────────────
 
   let latestJournal: OverviewSummary["latestJournal"] = null;
-  if (!journalSnap.empty) {
-    const d = journalSnap.docs[0].data() as JournalEntryDoc;
+  if (recentJournal.length > 0) {
+    const d = recentJournal[0].data;
     const ts = d.createdAt as Timestamp | null;
     latestJournal = {
       content: d.content,

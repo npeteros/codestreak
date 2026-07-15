@@ -1,10 +1,10 @@
 "use server";
 
-import { FieldValue } from "firebase-admin/firestore";
 import { revalidatePath } from "next/cache";
-import { adminDb } from "@/lib/firebase/admin";
-import type { CourseDoc } from "@/lib/firebase/types";
 import { getCurrentUser, requireRole } from "@/lib/auth/session";
+import * as coursesRepo from "@/lib/repositories/courses";
+import * as enrollmentsRepo from "@/lib/repositories/enrollments";
+import * as studentHubRepo from "@/lib/repositories/studentHub";
 
 async function getVerifiedInstructor(): Promise<string | null> {
   const user = await requireRole("INSTRUCTOR");
@@ -33,16 +33,11 @@ export async function createCourse(data: {
   let inviteCode = generateInviteCode();
   // Ensure uniqueness (collision is extremely rare but guard anyway)
   for (let i = 0; i < 5; i++) {
-    const existing = await adminDb
-      .collection("courses")
-      .where("inviteCode", "==", inviteCode)
-      .limit(1)
-      .get();
-    if (existing.empty) break;
+    if (!(await coursesRepo.isInviteCodeTaken(inviteCode))) break;
     inviteCode = generateInviteCode();
   }
 
-  const ref = await adminDb.collection("courses").add({
+  const courseId = await coursesRepo.createCourse({
     name: data.name.trim(),
     description: data.description.trim(),
     languageTag: data.languageTag,
@@ -50,39 +45,25 @@ export async function createCourse(data: {
     inviteCode,
     instructorId: uid,
     streakRules: data.streakRules,
-    isArchived: false,
-    isPublic: false,
-    createdAt: FieldValue.serverTimestamp(),
   });
 
-  return { success: true, courseId: ref.id };
+  return { success: true, courseId };
 }
 
 export async function getCourseByInviteCode(inviteCode: string) {
-  const snap = await adminDb
-    .collection("courses")
-    .where("inviteCode", "==", inviteCode.toUpperCase())
-    .limit(1)
-    .get();
-  if (snap.empty) return { success: false as const, error: "not_found" };
-  const doc = snap.docs[0];
-  const data = doc.data() as CourseDoc;
+  const found = await coursesRepo.getCourseByInviteCode(inviteCode.toUpperCase());
+  if (!found) return { success: false as const, error: "not_found" };
   return {
     success: true as const,
-    courseId: doc.id,
-    name: data.name,
-    description: data.description,
-    languageTag: data.languageTag,
+    courseId: found.id,
+    name: found.data.name,
+    description: found.data.description,
+    languageTag: found.data.languageTag,
   };
 }
 
 export async function enrollStudent(courseId: string, studentId: string) {
-  await adminDb
-    .collection("courses")
-    .doc(courseId)
-    .collection("enrollments")
-    .doc(studentId)
-    .set({ studentId, joinedAt: FieldValue.serverTimestamp() });
+  await enrollmentsRepo.enrollStudent(courseId, studentId);
   return { success: true as const };
 }
 
@@ -99,21 +80,14 @@ export async function getJoinPageData(inviteCode: string): Promise<
       authState: "unauthenticated" | "instructor" | "enrolled" | "not_enrolled";
     }
 > {
-  const snap = await adminDb
-    .collection("courses")
-    .where("inviteCode", "==", inviteCode.toUpperCase())
-    .limit(1)
-    .get();
+  const found = await coursesRepo.getCourseByInviteCode(inviteCode.toUpperCase());
+  if (!found) return { success: false, error: "not_found" };
 
-  if (snap.empty) return { success: false, error: "not_found" };
-
-  const doc = snap.docs[0];
-  const data = doc.data() as CourseDoc;
   const course = {
-    courseId: doc.id,
-    name: data.name,
-    description: data.description,
-    languageTag: data.languageTag,
+    courseId: found.id,
+    name: found.data.name,
+    description: found.data.description,
+    languageTag: found.data.languageTag,
   };
 
   const user = await getCurrentUser();
@@ -121,17 +95,12 @@ export async function getJoinPageData(inviteCode: string): Promise<
 
   if (user.role !== "STUDENT") return { success: true, course, authState: "instructor" };
 
-  const enrollSnap = await adminDb
-    .collection("courses")
-    .doc(doc.id)
-    .collection("enrollments")
-    .doc(user.uid)
-    .get();
+  const enrolled = await enrollmentsRepo.isEnrolled(found.id, user.uid);
 
   return {
     success: true,
     course,
-    authState: enrollSnap.exists ? "enrolled" : "not_enrolled",
+    authState: enrolled ? "enrolled" : "not_enrolled",
   };
 }
 
@@ -141,40 +110,20 @@ export async function joinCourse(
   const uid = await getVerifiedStudent();
   if (!uid) return { success: false, error: "unauthenticated" };
 
-  const snap = await adminDb
-    .collection("courses")
-    .where("inviteCode", "==", inviteCode.toUpperCase())
-    .limit(1)
-    .get();
+  const found = await coursesRepo.getCourseByInviteCode(inviteCode.toUpperCase());
+  if (!found) return { success: false, error: "not_found" };
+  const { id: courseId, data: courseData } = found;
 
-  if (snap.empty) return { success: false, error: "not_found" };
+  const alreadyEnrolled = await enrollmentsRepo.isEnrolled(courseId, uid);
 
-  const doc = snap.docs[0];
-  const courseId = doc.id;
-  const courseData = doc.data() as CourseDoc;
-
-  const enrollSnap = await adminDb
-    .collection("courses")
-    .doc(courseId)
-    .collection("enrollments")
-    .doc(uid)
-    .get();
-
-  if (!enrollSnap.exists) {
+  if (!alreadyEnrolled) {
     await Promise.all([
       enrollStudent(courseId, uid),
       // Write student hub doc so the dashboard can list enrolled courses
-      adminDb
-        .collection("students")
-        .doc(uid)
-        .collection("courses")
-        .doc(courseId)
-        .set({
-          courseId,
-          courseName: courseData.name,
-          timezone: courseData.timezone,
-          joinedAt: FieldValue.serverTimestamp(),
-        }),
+      studentHubRepo.createHubDoc(uid, courseId, {
+        courseName: courseData.name,
+        timezone: courseData.timezone,
+      }),
     ]);
   }
 
@@ -197,41 +146,29 @@ export async function getPublicCourses(): Promise<
   const uid = await getVerifiedStudent();
   if (!uid) return { success: false, error: "unauthenticated" };
 
-  const [coursesSnap, hubSnap] = await Promise.all([
-    adminDb
-      .collection("courses")
-      .where("isPublic", "==", true)
-      .where("isArchived", "==", false)
-      .get(),
-    adminDb.collection("students").doc(uid).collection("courses").get(),
+  const [publicCourses, hub] = await Promise.all([
+    coursesRepo.listPublicActiveCourses(),
+    studentHubRepo.listEnrolledCourses(uid),
   ]);
 
-  const joinedIds = new Set(hubSnap.docs.map((d) => d.id));
+  const joinedIds = new Set(hub.map((h) => h.id));
 
-  const docs = coursesSnap.docs
-    .filter((d) => !joinedIds.has(d.id))
+  const filtered = publicCourses
+    .filter((c) => !joinedIds.has(c.id))
     .sort((a, b) => {
-      const at = (a.data() as CourseDoc).createdAt?.toMillis() ?? 0;
-      const bt = (b.data() as CourseDoc).createdAt?.toMillis() ?? 0;
+      const at = a.data.createdAt?.toMillis() ?? 0;
+      const bt = b.data.createdAt?.toMillis() ?? 0;
       return bt - at;
     });
 
   const courses = await Promise.all(
-    docs.map(async (doc) => {
-      const data = doc.data() as CourseDoc;
-      const enrollmentsSnap = await adminDb
-        .collection("courses")
-        .doc(doc.id)
-        .collection("enrollments")
-        .get();
-      return {
-        id: doc.id,
-        name: data.name,
-        description: data.description,
-        languageTag: data.languageTag,
-        enrolledCount: enrollmentsSnap.size,
-      };
-    })
+    filtered.map(async ({ id, data }) => ({
+      id,
+      name: data.name,
+      description: data.description,
+      languageTag: data.languageTag,
+      enrolledCount: await enrollmentsRepo.countEnrollments(id),
+    }))
   );
 
   return { success: true, courses };
@@ -243,33 +180,20 @@ export async function joinPublicCourse(
   const uid = await getVerifiedStudent();
   if (!uid) return { success: false, error: "unauthenticated" };
 
-  const snap = await adminDb.collection("courses").doc(courseId).get();
-  if (!snap.exists) return { success: false, error: "not_found" };
+  const data = await coursesRepo.getCourse(courseId);
+  if (!data) return { success: false, error: "not_found" };
 
-  const data = snap.data() as CourseDoc;
   if (!data.isPublic) return { success: false, error: "not_public" };
 
-  const enrollSnap = await adminDb
-    .collection("courses")
-    .doc(courseId)
-    .collection("enrollments")
-    .doc(uid)
-    .get();
+  const alreadyEnrolled = await enrollmentsRepo.isEnrolled(courseId, uid);
 
-  if (!enrollSnap.exists) {
+  if (!alreadyEnrolled) {
     await Promise.all([
       enrollStudent(courseId, uid),
-      adminDb
-        .collection("students")
-        .doc(uid)
-        .collection("courses")
-        .doc(courseId)
-        .set({
-          courseId,
-          courseName: data.name,
-          timezone: data.timezone,
-          joinedAt: FieldValue.serverTimestamp(),
-        }),
+      studentHubRepo.createHubDoc(uid, courseId, {
+        courseName: data.name,
+        timezone: data.timezone,
+      }),
     ]);
   }
 
@@ -284,15 +208,8 @@ export async function leaveCourse(
   if (!uid) return { success: false, error: "unauthenticated" };
 
   await Promise.all([
-    adminDb
-      .collection("courses")
-      .doc(courseId)
-      .collection("enrollments")
-      .doc(uid)
-      .delete(),
-    adminDb.recursiveDelete(
-      adminDb.collection("students").doc(uid).collection("courses").doc(courseId)
-    ),
+    enrollmentsRepo.unenrollStudent(courseId, uid),
+    studentHubRepo.deleteHubDocCascade(uid, courseId),
   ]);
 
   revalidatePath("/courses");

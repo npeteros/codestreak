@@ -1,18 +1,12 @@
 "use server";
 
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import type {
-  UserRole,
-  CourseDoc,
-  ProjectDoc,
-  ProjectScope,
-  SprintTaskDoc,
-  SprintTaskStatus,
-} from "@/lib/firebase/types";
+import type { ProjectDoc, ProjectScope, SprintTaskDoc, SprintTaskStatus, UserRole } from "@/lib/firebase/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
 import { triggerJournalEntry } from "@/lib/actions/journal";
 import { getUid, getCurrentUser } from "@/lib/auth/session";
+import { getCourseOwnedByInstructor } from "@/lib/repositories/courses";
+import { isEnrolled } from "@/lib/repositories/enrollments";
+import * as projectsRepo from "@/lib/repositories/projects";
 
 export type Project = {
   id: string;
@@ -34,36 +28,7 @@ export type SprintTask = {
   createdByRole: UserRole;
 };
 
-// ── Session / role helpers ──────────────────────────────────────────────────
-
-async function getCourseForInstructor(
-  uid: string,
-  courseId: string
-): Promise<CourseDoc | null> {
-  const snap = await adminDb.collection("courses").doc(courseId).get();
-  if (!snap.exists) return null;
-  const data = snap.data() as CourseDoc;
-  if (data.instructorId !== uid) return null;
-  return data;
-}
-
-async function isEnrolled(courseId: string, studentId: string): Promise<boolean> {
-  const snap = await adminDb
-    .collection("courses")
-    .doc(courseId)
-    .collection("enrollments")
-    .doc(studentId)
-    .get();
-  return snap.exists;
-}
-
-function projectsCol(courseId: string) {
-  return adminDb.collection("courses").doc(courseId).collection("projects");
-}
-
-function tasksCol(courseId: string, projectId: string) {
-  return projectsCol(courseId).doc(projectId).collection("tasks");
-}
+// ── Access helpers ───────────────────────────────────────────────────────────
 
 async function verifyProjectAccess(
   courseId: string,
@@ -76,12 +41,11 @@ async function verifyProjectAccess(
   if (!user) return { ok: false, error: "unauthenticated" };
   const { uid, role } = user;
 
-  const projSnap = await projectsCol(courseId).doc(projectId).get();
-  if (!projSnap.exists) return { ok: false, error: "not_found" };
-  const project = projSnap.data() as ProjectDoc;
+  const project = await projectsRepo.getProject(courseId, projectId);
+  if (!project) return { ok: false, error: "not_found" };
 
   if (role === "INSTRUCTOR") {
-    const course = await getCourseForInstructor(uid, courseId);
+    const course = await getCourseOwnedByInstructor(uid, courseId);
     if (!course) return { ok: false, error: "forbidden" };
     return { ok: true, uid, role, project };
   }
@@ -136,7 +100,7 @@ export async function createProject(
   if ((await getCurrentUser())?.role !== "INSTRUCTOR")
     return { success: false, error: "forbidden" };
 
-  const course = await getCourseForInstructor(uid, courseId);
+  const course = await getCourseOwnedByInstructor(uid, courseId);
   if (!course) return { success: false, error: "no_course" };
 
   if (data.scope === "STUDENTS") {
@@ -148,18 +112,15 @@ export async function createProject(
     if (enrolled.some((ok) => !ok)) return { success: false, error: "not_enrolled" };
   }
 
-  const ref = await projectsCol(courseId).add({
-    courseId,
+  const id = await projectsRepo.createProject(courseId, {
     name: data.name,
-    description: data.description ?? "",
+    description: data.description,
     scope: data.scope,
-    studentIds: data.scope === "STUDENTS" ? data.studentIds : [],
-    isArchived: false,
+    studentIds: data.studentIds,
     createdBy: uid,
-    createdAt: FieldValue.serverTimestamp(),
   });
 
-  return { success: true, id: ref.id };
+  return { success: true, id };
 }
 
 export async function updateProject(
@@ -177,12 +138,11 @@ export async function updateProject(
   if ((await getCurrentUser())?.role !== "INSTRUCTOR")
     return { success: false, error: "forbidden" };
 
-  const course = await getCourseForInstructor(uid, courseId);
+  const course = await getCourseOwnedByInstructor(uid, courseId);
   if (!course) return { success: false, error: "no_course" };
 
-  const ref = projectsCol(courseId).doc(projectId);
-  const snap = await ref.get();
-  if (!snap.exists) return { success: false, error: "not_found" };
+  const project = await projectsRepo.getProject(courseId, projectId);
+  if (!project) return { success: false, error: "not_found" };
 
   if (data.scope === "STUDENTS") {
     if (!data.studentIds || data.studentIds.length === 0)
@@ -193,12 +153,7 @@ export async function updateProject(
     if (enrolled.some((ok) => !ok)) return { success: false, error: "not_enrolled" };
   }
 
-  await ref.update({
-    name: data.name,
-    description: data.description ?? "",
-    scope: data.scope,
-    studentIds: data.scope === "STUDENTS" ? data.studentIds : [],
-  });
+  await projectsRepo.updateProject(courseId, projectId, data);
 
   return { success: true };
 }
@@ -208,12 +163,12 @@ export async function listProjectsForInstructor(
 ): Promise<{ success: true; projects: Project[] } | { success: false; error: string }> {
   const uid = await getUid();
   if (!uid) return { success: false, error: "unauthenticated" };
-  const course = await getCourseForInstructor(uid, courseId);
+  const course = await getCourseOwnedByInstructor(uid, courseId);
   if (!course) return { success: false, error: "no_course" };
 
-  const snap = await projectsCol(courseId).get();
-  const projects = snap.docs
-    .map((d) => serializeProject(d.id, d.data() as ProjectDoc))
+  const all = await projectsRepo.listProjects(courseId);
+  const projects = all
+    .map(({ id, data }) => serializeProject(id, data))
     .filter((p) => !p.isArchived)
     .sort((a, b) => a.name.localeCompare(b.name));
   return { success: true, projects };
@@ -228,9 +183,9 @@ export async function listProjectsForStudent(
     return { success: false, error: "forbidden" };
   if (!(await isEnrolled(courseId, uid))) return { success: false, error: "forbidden" };
 
-  const snap = await projectsCol(courseId).get();
-  const projects = snap.docs
-    .map((d) => serializeProject(d.id, d.data() as ProjectDoc))
+  const all = await projectsRepo.listProjects(courseId);
+  const projects = all
+    .map(({ id, data }) => serializeProject(id, data))
     .filter(
       (p) => !p.isArchived && (p.scope === "ALL_STUDENTS" || p.studentIds.includes(uid))
     )
@@ -244,27 +199,18 @@ export async function toggleProjectArchive(
 ): Promise<{ success: boolean; isArchived?: boolean; error?: string }> {
   const uid = await getUid();
   if (!uid) return { success: false, error: "unauthenticated" };
-  const course = await getCourseForInstructor(uid, courseId);
+  const course = await getCourseOwnedByInstructor(uid, courseId);
   if (!course) return { success: false, error: "no_course" };
 
-  const ref = projectsCol(courseId).doc(projectId);
-  const snap = await ref.get();
-  if (!snap.exists) return { success: false, error: "not_found" };
+  const project = await projectsRepo.getProject(courseId, projectId);
+  if (!project) return { success: false, error: "not_found" };
 
-  const current = (snap.data() as ProjectDoc).isArchived;
-  await ref.update({ isArchived: !current });
-  return { success: true, isArchived: !current };
+  const next = !project.isArchived;
+  await projectsRepo.setProjectArchived(courseId, projectId, next);
+  return { success: true, isArchived: next };
 }
 
 // ── Sprint Tasks ─────────────────────────────────────────────────────────
-
-async function getAllTasks(
-  courseId: string,
-  projectId: string
-): Promise<Array<{ id: string; data: SprintTaskDoc }>> {
-  const snap = await tasksCol(courseId, projectId).get();
-  return snap.docs.map((d) => ({ id: d.id, data: d.data() as SprintTaskDoc }));
-}
 
 export async function getSprintTasks(
   courseId: string,
@@ -273,7 +219,7 @@ export async function getSprintTasks(
   const access = await verifyProjectAccess(courseId, projectId);
   if (!access.ok) return { success: false, error: access.error };
 
-  const all = await getAllTasks(courseId, projectId);
+  const all = await projectsRepo.listAllTasks(courseId, projectId);
   const tasks = all
     .map(({ id, data }) => serializeTask(id, data))
     .sort((a, b) => a.order - b.order);
@@ -288,28 +234,22 @@ export async function createSprintTask(
   const access = await verifyProjectAccess(courseId, projectId);
   if (!access.ok) return { success: false, error: access.error };
 
-  const all = await getAllTasks(courseId, projectId);
+  const all = await projectsRepo.listAllTasks(courseId, projectId);
   const inTodo = all.filter((t) => t.data.status === "TODO");
   const order = inTodo.length
     ? Math.max(...inTodo.map((t) => t.data.order)) + 1000
     : 1000;
 
-  const now = FieldValue.serverTimestamp();
-  const ref = await tasksCol(courseId, projectId).add({
+  const id = await projectsRepo.createTask(courseId, projectId, {
     title: data.title,
     description: data.description ?? "",
-    dueDate: data.dueDate
-      ? Timestamp.fromDate(new Date(data.dueDate + "T12:00:00Z"))
-      : null,
-    status: "TODO" as SprintTaskStatus,
+    dueDate: data.dueDate ? new Date(data.dueDate + "T12:00:00Z") : null,
     order,
     createdBy: access.uid,
     createdByRole: access.role,
-    createdAt: now,
-    updatedAt: now,
   });
 
-  return { success: true, id: ref.id };
+  return { success: true, id };
 }
 
 export async function updateSprintTask(
@@ -321,24 +261,20 @@ export async function updateSprintTask(
   const access = await verifyProjectAccess(courseId, projectId);
   if (!access.ok) return { success: false, error: access.error };
 
-  const ref = tasksCol(courseId, projectId).doc(taskId);
-  const snap = await ref.get();
-  if (!snap.exists) return { success: false, error: "not_found" };
-  const task = snap.data() as SprintTaskDoc;
+  const task = await projectsRepo.getTask(courseId, projectId, taskId);
+  if (!task) return { success: false, error: "not_found" };
 
   const canManage = access.role === "INSTRUCTOR" || task.createdBy === access.uid;
   if (!canManage) return { success: false, error: "forbidden" };
 
-  const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
+  const update: Record<string, unknown> = {};
   if (data.title !== undefined) update.title = data.title;
   if (data.description !== undefined) update.description = data.description;
   if (data.dueDate !== undefined) {
-    update.dueDate = data.dueDate
-      ? Timestamp.fromDate(new Date(data.dueDate + "T12:00:00Z"))
-      : null;
+    update.dueDate = data.dueDate ? new Date(data.dueDate + "T12:00:00Z") : null;
   }
 
-  await ref.update(update);
+  await projectsRepo.updateTask(courseId, projectId, taskId, update);
   return { success: true };
 }
 
@@ -350,15 +286,13 @@ export async function deleteSprintTask(
   const access = await verifyProjectAccess(courseId, projectId);
   if (!access.ok) return { success: false, error: access.error };
 
-  const ref = tasksCol(courseId, projectId).doc(taskId);
-  const snap = await ref.get();
-  if (!snap.exists) return { success: false, error: "not_found" };
-  const task = snap.data() as SprintTaskDoc;
+  const task = await projectsRepo.getTask(courseId, projectId, taskId);
+  if (!task) return { success: false, error: "not_found" };
 
   const canManage = access.role === "INSTRUCTOR" || task.createdBy === access.uid;
   if (!canManage) return { success: false, error: "forbidden" };
 
-  await ref.delete();
+  await projectsRepo.deleteTask(courseId, projectId, taskId);
   return { success: true };
 }
 
@@ -371,12 +305,10 @@ export async function moveSprintTask(
   const access = await verifyProjectAccess(courseId, projectId);
   if (!access.ok) return { success: false, error: access.error };
 
-  const ref = tasksCol(courseId, projectId).doc(taskId);
-  const snap = await ref.get();
-  if (!snap.exists) return { success: false, error: "not_found" };
-  const task = snap.data() as SprintTaskDoc;
+  const task = await projectsRepo.getTask(courseId, projectId, taskId);
+  if (!task) return { success: false, error: "not_found" };
 
-  const all = await getAllTasks(courseId, projectId);
+  const all = await projectsRepo.listAllTasks(courseId, projectId);
   const destCol = all
     .filter((t) => t.id !== taskId && t.data.status === data.status)
     .sort((a, b) => a.data.order - b.data.order);
@@ -395,11 +327,7 @@ export async function moveSprintTask(
     order = (before + after) / 2;
   }
 
-  await ref.update({
-    status: data.status,
-    order,
-    updatedAt: FieldValue.serverTimestamp(),
-  });
+  await projectsRepo.moveTask(courseId, projectId, taskId, data.status, order);
 
   const justCompleted = data.status === "DONE" && task.status !== "DONE";
   if (justCompleted && access.role === "STUDENT") {

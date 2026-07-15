@@ -2,10 +2,10 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { FieldValue } from "firebase-admin/firestore";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
+import { adminAuth } from "@/lib/firebase/admin";
 import type { UserRole } from "@/lib/firebase/types";
 import { SESSION_COOKIE_NAME as COOKIE_NAME } from "@/lib/auth/session";
+import { createUser } from "@/lib/repositories/users";
 
 export async function signUp(
   email: string,
@@ -22,13 +22,7 @@ export async function signUp(
 
     await adminAuth.setCustomUserClaims(userRecord.uid, { role });
 
-    await adminDb.collection("users").doc(userRecord.uid).set({
-      uid: userRecord.uid,
-      email,
-      name,
-      role,
-      createdAt: FieldValue.serverTimestamp(),
-    });
+    await createUser(userRecord.uid, { email, name, role });
 
     const customToken = await adminAuth.createCustomToken(userRecord.uid, {
       role,

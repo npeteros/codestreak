@@ -1,10 +1,12 @@
 "use server";
 
-import { adminDb } from "@/lib/firebase/admin";
-import type { StreakEntryDoc, CourseDoc } from "@/lib/firebase/types";
+import type { StreakEntryDoc } from "@/lib/firebase/types";
 import type { StreakEntry as CalcEntry } from "@/lib/streak/calculate";
 import { computeStreakData } from "./streak.calc";
 import { getUid } from "@/lib/auth/session";
+import { getCourse } from "@/lib/repositories/courses";
+import { getFirstEnrolledCourse } from "@/lib/repositories/studentHub";
+import { listStreakEntriesAsc, listStreakEntriesDesc, upsertStreakEntrySource } from "@/lib/repositories/streakEntries";
 
 // ── Existing types (used by StreakHeader / StreakHeaderLoader) ────────────────
 
@@ -30,40 +32,26 @@ export async function getStreakData(): Promise<
   if (!uid) return { success: false, error: "unauthenticated" };
 
   // Pick first enrolled course (hub doc lives at /students/{uid}/courses/{courseId})
-  const hubSnap = await adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .limit(1)
-    .get();
+  const hub = await getFirstEnrolledCourse(uid);
+  if (!hub) return { success: false, error: "no_courses" };
 
-  if (hubSnap.empty) return { success: false, error: "no_courses" };
-
-  const hubDoc = hubSnap.docs[0].data();
-  const courseId = hubDoc.courseId as string;
-  const timezone = (hubDoc.timezone as string) ?? "UTC";
+  const courseId = hub.data.courseId as string;
+  const timezone = hub.data.timezone ?? "UTC";
 
   // Course streakRules
-  const courseSnap = await adminDb.collection("courses").doc(courseId).get();
-  if (!courseSnap.exists) return { success: false, error: "course_not_found" };
-  const { streakRules } = courseSnap.data() as CourseDoc;
+  const course = await getCourse(courseId);
+  if (!course) return { success: false, error: "course_not_found" };
+  const { streakRules } = course;
 
   // All streak entries ordered oldest-first
-  const entriesSnap = await adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .doc(courseId)
-    .collection("streakEntries")
-    .orderBy("date", "asc")
-    .get();
+  const entries = await listStreakEntriesAsc(uid, courseId);
 
   const todayStr = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
 
   // Build map: YYYY-MM-DD -> StreakEntryDoc
   const entryMap = new Map<string, StreakEntryDoc>();
-  for (const doc of entriesSnap.docs) {
-    entryMap.set(doc.id, doc.data() as StreakEntryDoc);
+  for (const { id, data } of entries) {
+    entryMap.set(id, data);
   }
 
   return {
@@ -90,37 +78,15 @@ export async function recordStreakActivity({
   if (uid !== studentId) return { success: false, error: "forbidden" };
 
   // 2. Fetch course timezone
-  const courseSnap = await adminDb.collection("courses").doc(courseId).get();
-  if (!courseSnap.exists) return { success: false, error: "course_not_found" };
-  const { timezone } = courseSnap.data() as CourseDoc;
+  const course = await getCourse(courseId);
+  if (!course) return { success: false, error: "course_not_found" };
+  const { timezone } = course;
 
   // 3. Today's date string in course timezone
   const todayDate = new Date().toLocaleDateString("en-CA", { timeZone: timezone });
 
-  // 4. Reference the streak entry document (ID = date string)
-  const entryRef = adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .doc(courseId)
-    .collection("streakEntries")
-    .doc(todayDate);
-
-  const snap = await entryRef.get();
-
-  if (snap.exists) {
-    // Merge only the new source field — dot notation preserves sibling fields
-    await entryRef.update({ [`sources.${source}`]: true });
-  } else {
-    // Create document with all sources initialised to false, then set the active one
-    const sources: StreakEntryDoc["sources"] = {
-      challenge: false,
-      checkin: false,
-      sprintCard: false,
-    };
-    sources[source] = true;
-    await entryRef.set({ date: todayDate, courseId, sources });
-  }
+  // 4. Mark the source active for today (merging with any existing entry)
+  await upsertStreakEntrySource(uid, courseId, todayDate, source);
 
   return { success: true, date: todayDate };
 }
@@ -145,27 +111,16 @@ export async function getStreakEntries({
   if (uid !== studentId) return { success: false, error: "forbidden" };
 
   // 2. Query entries ordered newest-first, limited to `days`
-  const snap = await adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .doc(courseId)
-    .collection("streakEntries")
-    .orderBy("date", "desc")
-    .limit(days)
-    .get();
+  const rows = await listStreakEntriesDesc(uid, courseId, days);
 
-  const entries: CalcEntry[] = snap.docs.map((doc) => {
-    const data = doc.data() as StreakEntryDoc;
-    return {
-      date: data.date,
-      sources: {
-        challenge: data.sources.challenge ?? false,
-        checkin: data.sources.checkin ?? false,
-        sprintCard: data.sources.sprintCard ?? false,
-      },
-    };
-  });
+  const entries: CalcEntry[] = rows.map(({ data }) => ({
+    date: data.date,
+    sources: {
+      challenge: data.sources.challenge ?? false,
+      checkin: data.sources.checkin ?? false,
+      sprintCard: data.sources.sprintCard ?? false,
+    },
+  }));
 
   return { success: true, entries };
 }

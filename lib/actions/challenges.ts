@@ -1,16 +1,12 @@
 "use server";
 
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import type {
-  CourseDoc,
-  ChallengeDoc,
-  ChallengeDifficulty,
-  ChallengeSubmissionDoc,
-} from "@/lib/firebase/types";
+import type { ChallengeDifficulty } from "@/lib/firebase/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
 import { triggerJournalEntry } from "@/lib/actions/journal";
 import { getUid } from "@/lib/auth/session";
+import { getCourse } from "@/lib/repositories/courses";
+import { getChallenge, getScheduledChallenge } from "@/lib/repositories/challenges";
+import { findSubmissionForChallenge, upsertSubmission } from "@/lib/repositories/submissions";
 
 function getStartOfDayUTC(tz: string): Date {
   const now = new Date();
@@ -54,25 +50,16 @@ export async function getTodayChallenge(courseId: string) {
   const uid = await getUid();
   if (!uid) return { success: false as const, error: "unauthenticated" as const };
 
-  const courseSnap = await adminDb.collection("courses").doc(courseId).get();
-  if (!courseSnap.exists)
-    return { success: false as const, error: "course_not_found" as const };
-  const { timezone } = courseSnap.data() as CourseDoc;
+  const course = await getCourse(courseId);
+  if (!course) return { success: false as const, error: "course_not_found" as const };
+  const { timezone } = course;
 
   const startOfDay = getStartOfDayUTC(timezone);
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
-  const challengeSnap = await adminDb
-    .collection("courses")
-    .doc(courseId)
-    .collection("challenges")
-    .where("scheduledFor", ">=", Timestamp.fromDate(startOfDay))
-    .where("scheduledFor", "<", Timestamp.fromDate(endOfDay))
-    .where("isDraft", "==", false)
-    .limit(1)
-    .get();
+  const scheduled = await getScheduledChallenge(courseId, startOfDay, endOfDay);
 
-  if (challengeSnap.empty) {
+  if (!scheduled) {
     return {
       success: true as const,
       challenge: null,
@@ -81,35 +68,22 @@ export async function getTodayChallenge(courseId: string) {
     };
   }
 
-  const doc = challengeSnap.docs[0];
-  const data = doc.data() as ChallengeDoc;
+  const { id, data } = scheduled;
 
-  const submissionSnap = await adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .doc(courseId)
-    .collection("challengeSubmissions")
-    .where("challengeId", "==", doc.id)
-    .limit(1)
-    .get();
-
-  const submission = submissionSnap.docs[0]?.data() as
-    | ChallengeSubmissionDoc
-    | undefined;
+  const submission = await findSubmissionForChallenge(uid, courseId, id);
 
   return {
     success: true as const,
     challenge: {
-      id: doc.id,
+      id,
       title: data.title,
       description: data.description,
       difficulty: data.difficulty,
       topicTag: data.topicTag,
       starterCode: data.starterCode,
     },
-    alreadySubmitted: !submissionSnap.empty,
-    submittedCode: submission?.code ?? null,
+    alreadySubmitted: submission !== null,
+    submittedCode: submission?.data.code ?? null,
   };
 }
 
@@ -121,46 +95,15 @@ export async function submitChallenge(
   const uid = await getUid();
   if (!uid) return { success: false as const, error: "unauthenticated" as const };
 
-  const existing = await adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .doc(courseId)
-    .collection("challengeSubmissions")
-    .where("challengeId", "==", challengeId)
-    .limit(1)
-    .get();
-
-  if (!existing.empty) {
-    await existing.docs[0].ref.update({ code });
-    return { success: true as const };
-  }
-
-  await adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .doc(courseId)
-    .collection("challengeSubmissions")
-    .add({
-      challengeId,
-      code,
-      submittedAt: FieldValue.serverTimestamp(),
-    });
+  await upsertSubmission(uid, courseId, challengeId, code);
 
   recordStreakActivity({ studentId: uid, courseId, source: "challenge" }).catch(
     (err) => console.error("[streak] recordStreakActivity failed:", err)
   );
 
-  adminDb
-    .collection("courses")
-    .doc(courseId)
-    .collection("challenges")
-    .doc(challengeId)
-    .get()
-    .then((challengeSnap) => {
-      if (!challengeSnap.exists) return;
-      const challenge = challengeSnap.data() as ChallengeDoc;
+  getChallenge(courseId, challengeId)
+    .then((challenge) => {
+      if (!challenge) return;
       return triggerJournalEntry(uid, courseId, {
         triggerType: "CHALLENGE",
         title: challenge.title,

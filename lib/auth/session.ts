@@ -1,8 +1,9 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { DecodedIdToken } from "firebase-admin/auth";
-import { adminAuth, adminDb } from "@/lib/firebase/admin";
-import type { UserDoc, UserRole } from "@/lib/firebase/types";
+import { adminAuth } from "@/lib/firebase/admin";
+import type { UserRole } from "@/lib/firebase/types";
+import { getUser } from "@/lib/repositories/users";
 
 export const SESSION_COOKIE_NAME = "codestreak_session";
 
@@ -42,9 +43,8 @@ export interface CurrentUser {
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const uid = await getUid();
   if (!uid) return null;
-  const snap = await adminDb.collection("users").doc(uid).get();
-  if (!snap.exists) return null;
-  const data = snap.data() as UserDoc;
+  const data = await getUser(uid);
+  if (!data) return null;
   return { uid, role: data.role, name: data.name, email: data.email };
 }
 

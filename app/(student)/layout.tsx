@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import { adminDb } from "@/lib/firebase/admin";
 import { requireUidOrRedirect } from "@/lib/auth/session";
+import { listEnrolledCourses } from "@/lib/repositories/studentHub";
 import { StudentNav } from "./_components/StudentNav";
 import { StudentCourseSwitcher, type EnrolledCourse } from "./_components/StudentCourseSwitcher";
 import { LogoutButton } from "@/components/auth/LogoutButton";
@@ -14,17 +14,12 @@ export default async function StudentLayout({
 }) {
   const uid = await requireUidOrRedirect();
 
-  const hubSnap = await adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .get();
+  const hub = await listEnrolledCourses(uid);
 
-  const courses: EnrolledCourse[] = hubSnap.docs
-    .map((doc) => {
-      const d = doc.data();
+  const courses: EnrolledCourse[] = hub
+    .map(({ data: d }) => {
       if (!d.courseId || !d.courseName) return null;
-      return { id: d.courseId as string, name: d.courseName as string };
+      return { id: d.courseId, name: d.courseName };
     })
     .filter((c): c is EnrolledCourse => c !== null);
 

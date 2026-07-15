@@ -1,6 +1,6 @@
-import { adminDb } from "@/lib/firebase/admin";
-import type { UserDoc } from "@/lib/firebase/types";
 import { requireUidOrRedirect } from "@/lib/auth/session";
+import { getUser } from "@/lib/repositories/users";
+import { listEnrolledCourses } from "@/lib/repositories/studentHub";
 import {
   StudentOverviewClient,
   type CourseOption,
@@ -26,23 +26,20 @@ export default async function StudentOverviewPage({
 }) {
   const uid = await requireUidOrRedirect();
 
-  const [userSnap, hubSnap] = await Promise.all([
-    adminDb.collection("users").doc(uid).get(),
-    adminDb.collection("students").doc(uid).collection("courses").get(),
+  const [user, hub] = await Promise.all([
+    getUser(uid),
+    listEnrolledCourses(uid),
   ]);
 
-  const userName = userSnap.exists
-    ? (userSnap.data() as UserDoc).name
-    : "there";
+  const userName = user ? user.name : "there";
 
-  const courses: CourseOption[] = hubSnap.docs
-    .map((doc) => {
-      const d = doc.data();
+  const courses: CourseOption[] = hub
+    .map(({ data: d }) => {
       if (!d.courseId || !d.courseName || !d.timezone) return null;
       return {
-        id: d.courseId as string,
-        name: d.courseName as string,
-        timezone: d.timezone as string,
+        id: d.courseId,
+        name: d.courseName,
+        timezone: d.timezone,
       } satisfies CourseOption;
     })
     .filter((c): c is CourseOption => c !== null);
