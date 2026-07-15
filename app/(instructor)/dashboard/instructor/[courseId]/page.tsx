@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getClassOverview } from "@/lib/actions/instructor";
-import { InstructorOverviewClient } from "@/app/(instructor)/_components/InstructorOverviewClient";
+import { InstructorOverview } from "@/app/(instructor)/_components/InstructorOverview";
 
 export default async function InstructorOverviewPage({
   params,
@@ -24,5 +24,5 @@ export default async function InstructorOverviewPage({
     );
   }
 
-  return <InstructorOverviewClient data={result.data} />;
+  return <InstructorOverview data={result.data} />;
 }
