@@ -1,6 +1,7 @@
 import { requireUidOrRedirect } from "@/lib/auth/session";
 import { listEnrolledCourses } from "@/lib/repositories/studentHub";
-import { listProjectsForStudent } from "@/lib/actions/projects";
+import { listProjectsForStudent, getSprintTasks } from "@/lib/actions/projects";
+import type { SprintTask } from "@/lib/actions/projects";
 import { SprintClient } from "./SprintClient";
 
 export default async function StudentSprintPage({
@@ -36,5 +37,18 @@ export default async function StudentSprintPage({
   const result = await listProjectsForStudent(courseId);
   const projects = result.success ? result.projects : [];
 
-  return <SprintClient courseId={courseId} currentUserId={uid} initialProjects={projects} />;
+  let initialTasks: SprintTask[] = [];
+  if (projects.length > 0) {
+    const tasksResult = await getSprintTasks(courseId, projects[0].id);
+    initialTasks = tasksResult.success ? tasksResult.tasks : [];
+  }
+
+  return (
+    <SprintClient
+      courseId={courseId}
+      currentUserId={uid}
+      initialProjects={projects}
+      initialTasks={initialTasks}
+    />
+  );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import dynamic from "next/dynamic";
 import { Pencil, Archive as ArchiveIcon } from "lucide-react";
 import {
@@ -42,6 +42,7 @@ interface Props {
   currentUserId: string;
   initialProjects: Project[];
   students: StudentOption[];
+  initialTasks: SprintTask[];
 }
 
 export function ProjectsSprintClient({
@@ -49,14 +50,16 @@ export function ProjectsSprintClient({
   currentUserId,
   initialProjects,
   students,
+  initialTasks,
 }: Props) {
   const [projects, setProjects] = useState<Project[]>(initialProjects);
   const [selectedId, setSelectedId] = useState<string | null>(
     initialProjects[0]?.id ?? null
   );
   const [studentOverrideId, setStudentOverrideId] = useState<string | null>(null);
-  const [tasks, setTasks] = useState<SprintTask[]>([]);
+  const [tasks, setTasks] = useState<SprintTask[]>(initialTasks);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const isInitialMount = useRef(true);
   const [formState, setFormState] = useState<ProjectFormState>(null);
   const [, startTransition] = useTransition();
 
@@ -75,6 +78,12 @@ export function ProjectsSprintClient({
       : boardMembers[0]?.id ?? null;
 
   useEffect(() => {
+    // Initial selection's tasks are server-fetched into `initialTasks` —
+    // skip the redundant client round-trip on mount.
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     if (!selectedId || !selectedStudentId) {
       setTasks([]);
       return;

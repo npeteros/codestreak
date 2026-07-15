@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSprintTasks } from "@/lib/actions/projects";
 import type { Project, SprintTask } from "@/lib/actions/projects";
 import { SprintBoardClient } from "@/components/sprint/SprintBoardClient";
@@ -11,16 +11,29 @@ interface Props {
   courseId: string;
   currentUserId: string;
   initialProjects: Project[];
+  initialTasks: SprintTask[];
 }
 
-export function SprintClient({ courseId, currentUserId, initialProjects }: Props) {
+export function SprintClient({
+  courseId,
+  currentUserId,
+  initialProjects,
+  initialTasks,
+}: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(
     initialProjects[0]?.id ?? null
   );
-  const [tasks, setTasks] = useState<SprintTask[]>([]);
+  const [tasks, setTasks] = useState<SprintTask[]>(initialTasks);
   const [loadingTasks, setLoadingTasks] = useState(false);
+  const isInitialMount = useRef(true);
 
   useEffect(() => {
+    // Initial selection's tasks are server-fetched into `initialTasks` —
+    // skip the redundant client round-trip on mount.
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
     if (!selectedId) {
       setTasks([]);
       return;
