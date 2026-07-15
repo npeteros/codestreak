@@ -1,5 +1,5 @@
-import { adminDb } from "@/lib/firebase/admin";
 import { requireUidOrRedirect } from "@/lib/auth/session";
+import { listEnrolledCourses } from "@/lib/repositories/studentHub";
 import { getTodayChallenge } from "@/lib/actions/challenges";
 import { ChallengeClient } from "./ChallengeClient";
 
@@ -11,15 +11,9 @@ export default async function StudentChallengePage({
   const uid = await requireUidOrRedirect();
 
   const { courseId: queryCourseId } = await searchParams;
-  const hubSnap = await adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .get();
+  const hub = await listEnrolledCourses(uid);
 
-  const courseIds = hubSnap.docs
-    .map((doc) => doc.data().courseId as string)
-    .filter(Boolean);
+  const courseIds = hub.map(({ data: d }) => d.courseId).filter((id): id is string => Boolean(id));
   const validIds = new Set(courseIds);
   const courseId =
     queryCourseId && validIds.has(queryCourseId)

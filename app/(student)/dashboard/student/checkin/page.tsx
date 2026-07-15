@@ -1,8 +1,8 @@
-import { Timestamp } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import type { CheckIn, CheckInDoc } from "@/lib/firebase/types";
+import type { CheckIn } from "@/lib/firebase/types";
 import { requireUidOrRedirect } from "@/lib/auth/session";
 import { getStartOfDayUTC } from "@/lib/domain/time";
+import { listEnrolledCourses } from "@/lib/repositories/studentHub";
+import { hasCheckedInInRange, listRecentCheckIns } from "@/lib/repositories/checkins";
 import { CheckInPageClient } from "./CheckInPageClient";
 import type { CourseOption } from "./CheckInPageClient";
 
@@ -15,18 +15,12 @@ export default async function StudentCheckinPage({
   const uid = await requireUidOrRedirect();
 
   // 2. Fetch enrolled courses from /students/{uid}/courses hub documents
-  let courses: CourseOption[] = [];
-  const hubSnap = await adminDb
-    .collection("students")
-    .doc(uid)
-    .collection("courses")
-    .get();
+  const hub = await listEnrolledCourses(uid);
 
-  courses = hubSnap.docs
-    .map((doc) => {
-      const d = doc.data();
+  const courses: CourseOption[] = hub
+    .map(({ data: d }) => {
       if (!d.courseId || !d.courseName || !d.timezone) return null;
-      return { id: d.courseId as string, name: d.courseName as string, timezone: d.timezone as string } satisfies CourseOption;
+      return { id: d.courseId, name: d.courseName, timezone: d.timezone } satisfies CourseOption;
     })
     .filter((c): c is CourseOption => c !== null);
 
@@ -45,38 +39,22 @@ export default async function StudentCheckinPage({
   let initialAlreadyCheckedIn = false;
 
   if (selectedCourse) {
-    const checkInsRef = adminDb
-      .collection("students")
-      .doc(uid)
-      .collection("courses")
-      .doc(selectedCourseId)
-      .collection("checkIns");
+    const startOfDay = getStartOfDayUTC(selectedCourse.timezone);
+    const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
 
-    const [recentSnap, duplicateSnap] = await Promise.all([
-      checkInsRef.orderBy("createdAt", "desc").limit(7).get(),
-      (() => {
-        const startOfDay = getStartOfDayUTC(selectedCourse.timezone);
-        const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
-        return checkInsRef
-          .where("createdAt", ">=", Timestamp.fromDate(startOfDay))
-          .where("createdAt", "<", Timestamp.fromDate(endOfDay))
-          .limit(1)
-          .get();
-      })(),
+    const [recentRows, alreadyCheckedIn] = await Promise.all([
+      listRecentCheckIns(uid, selectedCourseId, 7),
+      hasCheckedInInRange(uid, selectedCourseId, startOfDay, endOfDay),
     ]);
 
-    initialAlreadyCheckedIn = !duplicateSnap.empty;
+    initialAlreadyCheckedIn = alreadyCheckedIn;
 
-    initialCheckIns = recentSnap.docs.map((doc) => {
-      const data = doc.data() as CheckInDoc;
-      const ts = data.createdAt as Timestamp | null;
-      return {
-        id: doc.id,
-        note: data.note,
-        courseId: data.courseId ?? selectedCourseId,
-        createdAt: ts ? ts.toDate().toISOString() : new Date().toISOString(),
-      } satisfies CheckIn;
-    });
+    initialCheckIns = recentRows.map(({ id, data }) => ({
+      id,
+      note: data.note,
+      courseId: data.courseId ?? selectedCourseId,
+      createdAt: (data.createdAt?.toDate() ?? new Date()).toISOString(),
+    } satisfies CheckIn));
   }
 
   return (
