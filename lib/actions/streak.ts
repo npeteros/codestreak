@@ -13,6 +13,7 @@ import { listStreakEntriesAsc, listStreakEntriesDesc, upsertStreakEntrySource } 
 export interface StreakEntry {
   date: string;
   level: 0 | 1 | 2 | 3 | 4;
+  sources: StreakEntryDoc["sources"] | null;
 }
 
 export interface StreakData {

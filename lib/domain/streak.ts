@@ -125,17 +125,29 @@ export function getLevelsForRange(
   todayStr: string,
   days: number,
   rules: StreakRules
-): Array<{ date: string; level: 0 | 1 | 2 | 3 | 4 }> {
+): Array<{
+  date: string;
+  level: 0 | 1 | 2 | 3 | 4;
+  sources: StreakEntryDoc["sources"] | null;
+}> {
   const start = new Date(todayStr + "T12:00:00Z");
   start.setUTCDate(start.getUTCDate() - (days - 1));
 
-  const out: Array<{ date: string; level: 0 | 1 | 2 | 3 | 4 }> = [];
+  const out: Array<{
+    date: string;
+    level: 0 | 1 | 2 | 3 | 4;
+    sources: StreakEntryDoc["sources"] | null;
+  }> = [];
   for (let i = 0; i < days; i++) {
     const d = new Date(start);
     d.setUTCDate(d.getUTCDate() + i);
     const ds = d.toISOString().slice(0, 10);
     const e = entryMap.get(ds);
-    out.push({ date: ds, level: e ? getHeatmapLevel(e.sources, rules) : 0 });
+    out.push({
+      date: ds,
+      level: e ? getHeatmapLevel(e.sources, rules) : 0,
+      sources: e ? e.sources : null,
+    });
   }
   return out;
 }
