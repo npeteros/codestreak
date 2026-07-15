@@ -3,7 +3,7 @@ import { getInstructorCourses } from "@/lib/actions/instructor";
 import { CoursesHomeClient } from "@/app/(instructor)/_components/CoursesHomeClient";
 import { InstructorCoursesShell } from "@/app/(instructor)/_components/InstructorCoursesShell";
 
-export default async function InstructorCoursesPage() {
+export default async function NewCoursePage() {
   const result = await getInstructorCourses();
 
   if (!result.success) {
@@ -11,14 +11,9 @@ export default async function InstructorCoursesPage() {
     return null;
   }
 
-  // If exactly one course, go straight in
-  if (result.courses.length === 1) {
-    redirect(`/dashboard/instructor/${result.courses[0].id}`);
-  }
-
   return (
     <InstructorCoursesShell>
-      <CoursesHomeClient initialCourses={result.courses} />
+      <CoursesHomeClient initialCourses={result.courses} startWithForm />
     </InstructorCoursesShell>
   );
 }

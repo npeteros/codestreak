@@ -82,7 +82,7 @@ export function CourseSwitcher({ courses, activeCourseId }: Props) {
               <button
                 onClick={() => {
                   setOpen(false);
-                  router.push("/dashboard/instructor");
+                  router.push("/dashboard/instructor/new");
                 }}
                 className="w-full text-left px-3.5 py-2.5 flex items-center gap-2 text-text-muted hover:text-text-primary hover:bg-white/[0.04] transition-colors cursor-pointer"
               >

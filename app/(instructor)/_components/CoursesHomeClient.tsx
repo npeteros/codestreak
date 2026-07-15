@@ -31,12 +31,13 @@ interface Course {
 
 interface Props {
   initialCourses: Course[];
+  startWithForm?: boolean;
 }
 
-export function CoursesHomeClient({ initialCourses }: Props) {
+export function CoursesHomeClient({ initialCourses, startWithForm }: Props) {
   const router = useRouter();
   const [courses] = useState(initialCourses);
-  const [showForm, setShowForm] = useState(courses.length === 0);
+  const [showForm, setShowForm] = useState(startWithForm || courses.length === 0);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [language, setLanguage] = useState("Python");
