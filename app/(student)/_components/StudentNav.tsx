@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { LayoutGrid, Zap, CircleCheck, BarChart3, BookOpen, Compass } from "lucide-react";
+import { MobileMoreSheet } from "@/components/ui/MobileMoreSheet";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 
 type NavItem = {
   path: string;
@@ -21,6 +23,12 @@ const navItems: NavItem[] = [
   { path: "/dashboard/student/journal", label: "AI Journal", icon: BookOpen },
 ];
 
+const BOTTOM_PRIMARY_PATHS = [
+  "/dashboard/student",
+  "/dashboard/student/challenge",
+  "/dashboard/student/checkin",
+];
+
 type Props = {
   variant?: "sidebar" | "bottom";
 };
@@ -35,9 +43,15 @@ export function StudentNav({ variant = "sidebar" }: Props) {
   }
 
   if (variant === "bottom") {
+    const primaryItems = navItems.filter((item) => BOTTOM_PRIMARY_PATHS.includes(item.path));
+    const moreItems = navItems.filter((item) => !BOTTOM_PRIMARY_PATHS.includes(item.path));
+    const isMoreActive = moreItems.some(({ path, exact, disabled }) =>
+      !disabled && (exact ? pathname === path : pathname.startsWith(path))
+    );
+
     return (
       <>
-        {navItems.map(({ path, label, icon: Icon, exact, disabled }) => {
+        {primaryItems.map(({ path, label, icon: Icon, exact, disabled }) => {
           const isActive = !disabled && (exact ? pathname === path : pathname.startsWith(path));
 
           if (disabled) {
@@ -48,7 +62,7 @@ export function StudentNav({ variant = "sidebar" }: Props) {
                 className="flex flex-1 flex-col items-center gap-1 py-4 px-1 opacity-40 cursor-not-allowed"
               >
                 <Icon size={20} className="shrink-0" />
-                <span className="text-[10px] font-medium text-text-faint leading-none">{label}</span>
+                <span className="text-[10px] font-medium text-text-faint leading-none text-center">{label}</span>
               </div>
             );
           }
@@ -63,10 +77,16 @@ export function StudentNav({ variant = "sidebar" }: Props) {
               ].join(" ")}
             >
               <Icon size={20} className="shrink-0" />
-              <span className="text-[10px] font-medium leading-none">{label}</span>
+              <span className="text-[10px] font-medium leading-none text-center">{label}</span>
             </Link>
           );
         })}
+        <MobileMoreSheet
+          active={isMoreActive}
+          items={moreItems.map(({ path, label, icon }) => ({ href: href(path), label, icon }))}
+        >
+          <LogoutButton showLabel />
+        </MobileMoreSheet>
       </>
     );
   }

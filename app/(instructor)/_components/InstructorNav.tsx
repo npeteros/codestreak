@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
 import { LayoutGrid, Code2, Users, BarChart3, Settings } from "lucide-react";
+import { MobileMoreSheet } from "@/components/ui/MobileMoreSheet";
+import { LogoutButton } from "@/components/auth/LogoutButton";
 
 type NavItem = {
   segment: string;
@@ -19,6 +21,8 @@ const navItems: NavItem[] = [
   { segment: "settings", label: "Settings", icon: Settings },
 ];
 
+const BOTTOM_PRIMARY_SEGMENTS = ["", "challenges", "students"];
+
 type Props = {
   variant?: "sidebar" | "bottom";
 };
@@ -29,9 +33,16 @@ export function InstructorNav({ variant = "sidebar" }: Props) {
   const base = `/dashboard/instructor/${params.courseId}`;
 
   if (variant === "bottom") {
+    const primaryItems = navItems.filter((item) => BOTTOM_PRIMARY_SEGMENTS.includes(item.segment));
+    const moreItems = navItems.filter((item) => !BOTTOM_PRIMARY_SEGMENTS.includes(item.segment));
+    const isMoreActive = moreItems.some(({ segment, exact }) => {
+      const href = segment ? `${base}/${segment}` : base;
+      return exact ? pathname === href : pathname.startsWith(href);
+    });
+
     return (
       <>
-        {navItems.map(({ segment, label, icon: Icon, exact }) => {
+        {primaryItems.map(({ segment, label, icon: Icon, exact }) => {
           const href = segment ? `${base}/${segment}` : base;
           const isActive = exact ? pathname === href : pathname.startsWith(href);
           return (
@@ -44,10 +55,20 @@ export function InstructorNav({ variant = "sidebar" }: Props) {
               ].join(" ")}
             >
               <Icon size={20} className="shrink-0" />
-              <span className="text-[10px] font-medium leading-none">{label}</span>
+              <span className="text-[10px] font-medium leading-none text-center">{label}</span>
             </Link>
           );
         })}
+        <MobileMoreSheet
+          active={isMoreActive}
+          items={moreItems.map(({ segment, label, icon }) => ({
+            href: segment ? `${base}/${segment}` : base,
+            label,
+            icon,
+          }))}
+        >
+          <LogoutButton showLabel />
+        </MobileMoreSheet>
       </>
     );
   }

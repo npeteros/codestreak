@@ -6,7 +6,11 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import { logOut } from "@/lib/actions/auth";
 
-export function LogoutButton() {
+type Props = {
+  showLabel?: boolean;
+};
+
+export function LogoutButton({ showLabel = false }: Props) {
   const [isPending, startTransition] = useTransition();
 
   function handleLogout() {
@@ -31,7 +35,7 @@ export function LogoutButton() {
       ) : (
         <LogOut size={16} className="shrink-0" />
       )}
-      <span className="hidden lg:inline">
+      <span className={showLabel ? "inline" : "hidden lg:inline"}>
         {isPending ? "Logging out…" : "Log out"}
       </span>
     </button>
