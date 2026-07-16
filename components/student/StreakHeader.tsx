@@ -130,9 +130,9 @@ export function StreakHeader({
   courseId,
 }: StreakData & { courseId?: string }) {
   return (
-    <section className="bg-surface border border-white/[0.07] rounded-[18px] px-[26px] py-6 flex flex-wrap gap-[30px] items-center justify-between">
-      {/* Left: streak stats */}
-      <div className="flex flex-col gap-[10px] min-w-[170px]">
+    <div className="flex flex-col sm:flex-row gap-3 sm:gap-[30px] sm:bg-surface sm:border sm:border-white/[0.07] sm:rounded-[18px] sm:px-[26px] sm:py-6 sm:items-center sm:justify-between sm:flex-wrap">
+      {/* Streak stats */}
+      <div className="bg-surface border border-white/[0.07] rounded-[18px] px-[26px] py-6 sm:bg-transparent sm:border-0 sm:p-0 flex flex-col gap-[10px] min-w-[170px]">
         <div className="flex items-baseline gap-3">
           <span className="font-mono text-[64px] leading-[0.9] text-gold font-medium tracking-[-0.02em]">
             {streak}
@@ -149,8 +149,8 @@ export function StreakHeader({
         <ShareButton courseId={courseId} streak={streak} longest={longest} activeDays={activeDays} entries={entries} />
       </div>
 
-      {/* Right: heatmap */}
-      <div className="flex flex-col gap-[9px] min-w-0">
+      {/* Heatmap */}
+      <div className="bg-surface border border-white/[0.07] rounded-[18px] px-[26px] py-6 sm:bg-transparent sm:border-0 sm:p-0 flex flex-col gap-[9px] min-w-0">
         <div className="flex justify-between items-center gap-4">
           <span className="font-mono text-[11px] tracking-[.04em] text-text-muted">
             LAST {weekCount} WEEKS
@@ -175,6 +175,6 @@ export function StreakHeader({
         </div>
         <Heatmap entries={entries} weekCount={weekCount} />
       </div>
-    </section>
+    </div>
   );
 }
