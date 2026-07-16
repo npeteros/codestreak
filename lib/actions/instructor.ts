@@ -26,7 +26,7 @@ import {
 
 
 const AT_RISK_DAYS = 3;
-const HEATMAP_WEEKS = 26;
+const HEATMAP_WEEKS = 18;
 const DRAWER_RECENT_LIMIT = 5;
 const HISTORY_PAGE_SIZE = 20;
 
