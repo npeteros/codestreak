@@ -72,7 +72,7 @@ export function StudentNav({ variant = "sidebar" }: Props) {
               key={path}
               href={href(path)}
               className={[
-                "flex flex-1 flex-col items-center gap-1 py-4 px-1 transition-colors",
+                "flex flex-1 flex-col items-center gap-1 py-6 px-1 transition-colors",
                 isActive ? "text-gold" : "text-text-secondary",
               ].join(" ")}
             >
