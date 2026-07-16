@@ -93,6 +93,7 @@ export function ChallengesClient({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("manual");
   const [difficulty, setDifficulty] = useState<Difficulty>("MEDIUM");
+  const [title, setTitle] = useState("");
   const [prompt, setPrompt] = useState("");
   const [starterCode, setStarterCode] = useState(lang.starter);
   const [topicTag, setTopicTag] = useState("");
@@ -136,10 +137,11 @@ export function ChallengesClient({
 
   function handleSchedule() {
     if (mode === "manual") {
+      if (!title.trim()) { showToast("Add a title first"); return; }
       if (!prompt.trim()) { showToast("Add a problem prompt first"); return; }
       startTransition(async () => {
         const res = await createInstructorChallenge(courseId, {
-          title: topicTag || "Challenge",
+          title,
           description: prompt,
           difficulty,
           topicTag,
@@ -149,6 +151,7 @@ export function ChallengesClient({
         });
         if (res.success) {
           showToast(`Challenge scheduled for ${schedDate}`);
+          setTitle("");
           setPrompt("");
           setTopicTag("");
           if (schedDate === defaultDate) refreshTodayChallenge();
@@ -220,10 +223,11 @@ export function ChallengesClient({
 
   function handleSaveDraft() {
     if (mode === "manual") {
+      if (!title.trim()) { showToast("Add a title first"); return; }
       if (!prompt.trim()) { showToast("Add a problem prompt first"); return; }
       startTransition(async () => {
         await createInstructorChallenge(courseId, {
-          title: topicTag || "Draft",
+          title,
           description: prompt,
           difficulty,
           topicTag,
@@ -412,6 +416,17 @@ export function ChallengesClient({
         <div className="flex gap-4 flex-wrap items-stretch">
           {/* Left: prompt + meta */}
           <div className="flex-[1.2_1_340px] min-w-[300px] bg-surface border border-white/[0.07] rounded-[15px] p-[22px] flex flex-col gap-[18px]">
+            <div className="flex flex-col gap-2">
+              <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                TITLE
+              </label>
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Reverse a Linked List"
+                className="bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[13px] py-[11px] font-sans text-[14px] outline-none placeholder:text-[#5f5d57]"
+              />
+            </div>
             <div className="flex flex-col gap-2">
               <label className="font-serif text-[18px] text-text-primary">
                 Problem prompt
