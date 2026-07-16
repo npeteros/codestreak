@@ -3,6 +3,7 @@
 import type { ProjectDoc, ProjectScope, SprintTaskDoc, SprintTaskStatus, UserRole } from "@/lib/firebase/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
 import { triggerJournalEntry } from "@/lib/actions/journal";
+import { notifyProjectCreated, notifyTaskCreated } from "@/lib/actions/notifications";
 import { getUid, getCurrentUser } from "@/lib/auth/session";
 import { getCourseOwnedByInstructor } from "@/lib/repositories/courses";
 import { isEnrolled } from "@/lib/repositories/enrollments";
@@ -126,6 +127,10 @@ export async function createProject(
     studentIds: data.studentIds,
     createdBy: uid,
   });
+
+  notifyProjectCreated(courseId, id).catch((err) =>
+    console.error("[notifications] notifyProjectCreated failed:", err)
+  );
 
   return { success: true, id };
 }
@@ -257,6 +262,14 @@ export async function createSprintTask(
     createdBy: access.uid,
     createdByRole: access.role,
   });
+
+  // Only cross-person case: an instructor adding a task to a student's board.
+  // A student creating their own task shouldn't email themselves.
+  if (access.role === "INSTRUCTOR") {
+    notifyTaskCreated(courseId, projectId, id, access.boardStudentId).catch((err) =>
+      console.error("[notifications] notifyTaskCreated failed:", err)
+    );
+  }
 
   return { success: true, id };
 }

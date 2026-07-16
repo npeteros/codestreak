@@ -15,7 +15,7 @@ lib/actions/*.ts          "use server" — orchestration only (see below)
    |    |          |              |
 lib/auth  lib/repositories  lib/domain  lib/services
 session   Firestore access   pure math   external APIs
-verification (typed, no      (streak/    (OpenAI)
+verification (typed, no      (streak/    (OpenAI, email)
              shaping)         heatmap,
                               invite codes,
                               time helpers)
@@ -99,6 +99,29 @@ which model/SDK is behind a feature.
 **Rule:** no file outside `lib/services/openai/` should import the `openai`
 package or read `OPENAI_API_KEY`.
 
+### `lib/services/email/*.ts`
+
+Isolates the email transport the same way `lib/services/openai/` isolates
+the OpenAI SDK.
+
+- **`client.ts`** — `getMailer()`, a single lazy-instantiated Nodemailer
+  transporter authenticated against Gmail SMTP (`GMAIL_USER` /
+  `GMAIL_APP_PASSWORD`, a Google Account App Password). Falls back to a
+  zero-config Ethereal test account when those env vars are unset, so local
+  dev works without real credentials — sent mail is logged with an Ethereal
+  preview URL instead of hitting a real inbox.
+- **`send.ts`** — `sendEmail({ to, subject, react })`, which renders a
+  react-email component to HTML via `@react-email/render` and hands it to
+  the transporter. Throws on failure; callers fire-and-forget with `.catch`,
+  same as every other side effect in this codebase.
+
+Templates live in the top-level `emails/` directory (react-email's
+convention, and where its `email dev` preview CLI — `npm run email:dev` —
+looks), not under `lib/`.
+
+**Rule:** no file outside `lib/services/email/` should import `nodemailer`
+or read `GMAIL_USER`/`GMAIL_APP_PASSWORD`.
+
 ### `lib/actions/*.ts` — orchestration only
 
 Every exported Server Action should be:
@@ -109,9 +132,11 @@ Every exported Server Action should be:
 4. **Response shape** — assemble exactly what the caller needs, nothing more.
 
 Fire-and-forget side effects (recording a streak entry, triggering a journal
-reflection after a check-in/submission/sprint-task-completion) are called
-without `await`ing their result, with a `.catch(console.error)` so a failure
-there never blocks or fails the primary action.
+reflection after a check-in/submission/sprint-task-completion, sending a
+notification email via `lib/actions/notifications.ts` after a challenge/
+project/task is created or a student is nudged) are called without
+`await`ing their result, with a `.catch(console.error)` so a failure there
+never blocks or fails the primary action.
 
 ## The streakRules divergence (read before touching streak/heatmap code)
 

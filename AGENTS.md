@@ -21,6 +21,7 @@ Rules an agent should not violate without a deliberate, explicit reason:
 - No `adminDb`/Firestore path construction outside `lib/repositories/`.
 - No cookie/session-cookie verification outside `lib/auth/session.ts`.
 - No `openai` package usage or `OPENAI_API_KEY` read outside `lib/services/openai/`.
+- No `nodemailer` package usage or `GMAIL_USER`/`GMAIL_APP_PASSWORD` read outside `lib/services/email/`.
 - No business-rule math (streak/heatmap calculations) inlined in an action or page — it belongs in `lib/domain/streak.ts`.
 - `lib/actions/*.ts` exports must stay auth-guard → repository → domain/service → response-shape; if a change makes an action file grow raw logic again, extract it back to the appropriate layer instead.
 

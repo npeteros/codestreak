@@ -23,9 +23,10 @@ import {
   generateChallengeDrafts,
   type AiChallengeDraft,
 } from "@/lib/services/openai/challengeGeneration";
+import { notifyChallengeCreated, notifyStudentNudged } from "@/lib/actions/notifications";
 
 
-const AT_RISK_DAYS = 3;
+const AT_RISK_DAYS = 1;
 const HEATMAP_WEEKS = 18;
 const DRAWER_RECENT_LIMIT = 5;
 const HISTORY_PAGE_SIZE = 20;
@@ -555,11 +556,22 @@ export async function getStudentCheckInHistory(
 }
 
 export async function nudgeStudent(
-  _courseId: string,
-  _studentId: string
+  courseId: string,
+  studentId: string
 ): Promise<{ success: boolean; error?: string }> {
   const uid = await verifyInstructor();
   if (!uid) return { success: false, error: "unauthenticated" };
+
+  const course = await getCourse(uid, courseId);
+  if (!course) return { success: false, error: "no_course" };
+
+  if (!(await enrollmentsRepo.isEnrolled(courseId, studentId)))
+    return { success: false, error: "not_enrolled" };
+
+  notifyStudentNudged(courseId, studentId).catch((err) =>
+    console.error("[notifications] notifyStudentNudged failed:", err)
+  );
+
   return { success: true };
 }
 
@@ -715,6 +727,12 @@ export async function createInstructorChallenge(
     isDraft: data.isDraft,
     isAiGenerated: false,
   });
+
+  if (!data.isDraft) {
+    notifyChallengeCreated(course.id, id).catch((err) =>
+      console.error("[notifications] notifyChallengeCreated failed:", err)
+    );
+  }
 
   return { success: true, id };
 }
