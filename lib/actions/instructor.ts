@@ -13,6 +13,7 @@ import * as checkinsRepo from "@/lib/repositories/checkins";
 import * as journalRepo from "@/lib/repositories/journal";
 import * as challengesRepo from "@/lib/repositories/challenges";
 import { listSprintCards } from "@/lib/repositories/sprintCards";
+import { getStartOfDayUTC } from "@/lib/domain/time";
 import {
   calcStreak,
   lastActiveDays,
@@ -735,6 +736,112 @@ export async function createInstructorChallenge(
   }
 
   return { success: true, id };
+}
+
+export type TodayInstructorChallenge = {
+  id: string;
+  title: string;
+  description: string;
+  difficulty: "EASY" | "MEDIUM" | "HARD";
+  topicTag: string;
+  starterCode: string;
+  scheduledFor: string;
+  isDraft: boolean;
+};
+
+export async function getTodayInstructorChallenge(
+  courseId: string
+): Promise<
+  | { success: true; challenge: TodayInstructorChallenge | null }
+  | { success: false; error: string }
+> {
+  const uid = await verifyInstructor();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  const course = await getCourse(uid, courseId);
+  if (!course) return { success: false, error: "no_course" };
+
+  const startOfDay = getStartOfDayUTC(course.data.timezone);
+  const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
+
+  const scheduled = await challengesRepo.getScheduledChallenge(
+    course.id,
+    startOfDay,
+    endOfDay
+  );
+  if (!scheduled) return { success: true, challenge: null };
+
+  const { id, data } = scheduled;
+  return {
+    success: true,
+    challenge: {
+      id,
+      title: data.title,
+      description: data.description,
+      difficulty: data.difficulty,
+      topicTag: data.topicTag,
+      starterCode: data.starterCode,
+      scheduledFor: data.scheduledFor.toDate().toISOString().slice(0, 10),
+      isDraft: data.isDraft,
+    },
+  };
+}
+
+export async function updateInstructorChallenge(
+  courseId: string,
+  challengeId: string,
+  data: {
+    title: string;
+    description: string;
+    difficulty: "EASY" | "MEDIUM" | "HARD";
+    topicTag: string;
+    starterCode: string;
+    scheduledFor: string;
+    isDraft: boolean;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const uid = await verifyInstructor();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  const course = await getCourse(uid, courseId);
+  if (!course) return { success: false, error: "no_course" };
+
+  if (!data.title.trim()) return { success: false, error: "missing_title" };
+
+  const existing = await challengesRepo.getChallenge(course.id, challengeId);
+  if (!existing) return { success: false, error: "not_found" };
+
+  const scheduledDate = new Date(data.scheduledFor + "T12:00:00Z");
+
+  await challengesRepo.updateChallenge(course.id, challengeId, {
+    title: data.title,
+    description: data.description,
+    difficulty: data.difficulty,
+    topicTag: data.topicTag,
+    starterCode: data.starterCode,
+    scheduledFor: scheduledDate,
+    isDraft: data.isDraft,
+  });
+
+  return { success: true };
+}
+
+export async function deleteInstructorChallenge(
+  courseId: string,
+  challengeId: string
+): Promise<{ success: boolean; error?: string }> {
+  const uid = await verifyInstructor();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  const course = await getCourse(uid, courseId);
+  if (!course) return { success: false, error: "no_course" };
+
+  const existing = await challengesRepo.getChallenge(course.id, challengeId);
+  if (!existing) return { success: false, error: "not_found" };
+
+  await challengesRepo.deleteChallenge(course.id, challengeId);
+
+  return { success: true };
 }
 
 export async function generateAiChallenges(

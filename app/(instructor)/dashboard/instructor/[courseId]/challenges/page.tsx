@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getSettings } from "@/lib/actions/instructor";
+import { getSettings, getTodayInstructorChallenge } from "@/lib/actions/instructor";
 import { ChallengesClient } from "@/app/(instructor)/_components/ChallengesClient";
 
 export default async function InstructorChallengesPage({
@@ -25,12 +25,16 @@ export default async function InstructorChallengesPage({
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const todayResult = await getTodayInstructorChallenge(courseId);
 
   return (
     <ChallengesClient
       courseId={courseId}
       defaultDate={today}
       languageTag={result.settings.languageTag}
+      initialTodayChallenge={
+        todayResult.success ? todayResult.challenge : null
+      }
     />
   );
 }

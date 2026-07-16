@@ -4,9 +4,14 @@ import { useState, useTransition } from "react";
 import {
   createInstructorChallenge,
   generateAiChallenges,
+  getTodayInstructorChallenge,
+  updateInstructorChallenge,
+  deleteInstructorChallenge,
+  type TodayInstructorChallenge,
 } from "@/lib/actions/instructor";
 import type { AiChallengeDraft } from "@/lib/services/openai/challengeGeneration";
 import { useToast } from "@/lib/hooks/useToast";
+import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 
 type Mode = "manual" | "ai";
 type Difficulty = "EASY" | "MEDIUM" | "HARD";
@@ -64,10 +69,28 @@ interface Props {
   courseId: string;
   defaultDate: string;
   languageTag: string;
+  initialTodayChallenge: TodayInstructorChallenge | null;
 }
 
-export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) {
+export function ChallengesClient({
+  courseId,
+  defaultDate,
+  languageTag,
+  initialTodayChallenge,
+}: Props) {
   const lang = languageMeta(languageTag);
+  const [todayChallenge, setTodayChallenge] = useState(initialTodayChallenge);
+  const [editingToday, setEditingToday] = useState<{
+    title: string;
+    description: string;
+    difficulty: Difficulty;
+    topicTag: string;
+    starter: string;
+    schedDate: string;
+  } | null>(null);
+  const [isSavingTodayEdit, setIsSavingTodayEdit] = useState(false);
+  const [isDeletingToday, setIsDeletingToday] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("manual");
   const [difficulty, setDifficulty] = useState<Difficulty>("MEDIUM");
   const [prompt, setPrompt] = useState("");
@@ -94,6 +117,11 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
     setAiDrafts((ds) =>
       ds.map((d) => (d.id === id ? { ...d, selected: !d.selected } : d))
     );
+  }
+
+  async function refreshTodayChallenge() {
+    const result = await getTodayInstructorChallenge(courseId);
+    setTodayChallenge(result.success ? result.challenge : null);
   }
 
   async function handleGenerate() {
@@ -123,6 +151,7 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
           showToast(`Challenge scheduled for ${schedDate}`);
           setPrompt("");
           setTopicTag("");
+          if (schedDate === defaultDate) refreshTodayChallenge();
         } else {
           showToast("Failed to schedule — try again");
         }
@@ -148,6 +177,7 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
           `Scheduled ${selected.length} challenge${selected.length > 1 ? "s" : ""}`
         );
         setAiDrafts((ds) => ds.map((d) => ({ ...d, selected: false })));
+        if (schedDate === defaultDate) refreshTodayChallenge();
       });
     }
   }
@@ -182,6 +212,7 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
       showToast(`"${editingDraft.title}" scheduled for ${editingDraft.schedDate}`);
       setAiDrafts((ds) => ds.filter((d) => d.id !== editingDraft.id));
       setEditingDraft(null);
+      if (editingDraft.schedDate === defaultDate) refreshTodayChallenge();
     } else {
       showToast("Failed to schedule — try again");
     }
@@ -204,6 +235,60 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
       });
     } else {
       showToast("Select and schedule to save AI challenges");
+    }
+  }
+
+  function openEditToday() {
+    if (!todayChallenge) return;
+    setEditingToday({
+      title: todayChallenge.title,
+      description: todayChallenge.description,
+      difficulty: todayChallenge.difficulty,
+      topicTag: todayChallenge.topicTag,
+      starter: todayChallenge.starterCode,
+      schedDate: todayChallenge.scheduledFor,
+    });
+  }
+
+  async function handleSaveTodayEdit() {
+    if (!editingToday || !todayChallenge) return;
+    if (!editingToday.title.trim()) { showToast("Add a title first"); return; }
+    if (!editingToday.description.trim()) { showToast("Add a description first"); return; }
+    setIsSavingTodayEdit(true);
+    const res = await updateInstructorChallenge(courseId, todayChallenge.id, {
+      title: editingToday.title,
+      description: editingToday.description,
+      difficulty: editingToday.difficulty,
+      topicTag: editingToday.topicTag,
+      starterCode: editingToday.starter,
+      scheduledFor: editingToday.schedDate,
+      isDraft: false,
+    });
+    setIsSavingTodayEdit(false);
+    if (res.success) {
+      showToast("Today's challenge updated");
+      setEditingToday(null);
+      refreshTodayChallenge();
+    } else {
+      showToast("Failed to save — try again");
+    }
+  }
+
+  function handleDeleteToday() {
+    setDeleteDialogOpen(true);
+  }
+
+  async function handleDeleteTodayConfirm() {
+    setDeleteDialogOpen(false);
+    if (!todayChallenge) return;
+    setIsDeletingToday(true);
+    const res = await deleteInstructorChallenge(courseId, todayChallenge.id);
+    setIsDeletingToday(false);
+    if (res.success) {
+      showToast("Today's challenge deleted");
+      setTodayChallenge(null);
+    } else {
+      showToast("Failed to delete — try again");
     }
   }
 
@@ -262,6 +347,51 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
 
   return (
     <div className="flex flex-col gap-[18px]" style={{ animation: "csFade .25s ease" }}>
+      {todayChallenge && (
+        <div className="flex flex-col gap-3.5 bg-surface border border-white/[0.08] rounded-[15px] p-[22px]">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="flex flex-col gap-1">
+              <span className="font-mono text-[11px] tracking-[.1em] text-gold">
+                TODAY&apos;S CHALLENGE
+              </span>
+              <h2 className="font-serif font-normal text-[1.4rem] text-text-primary">
+                {todayChallenge.title}
+              </h2>
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className={[
+                  "font-mono text-[11px] tracking-[.06em] px-2 py-0.5 rounded-[5px]",
+                  todayChallenge.difficulty === "EASY"
+                    ? "text-emerald-400 bg-emerald-400/10"
+                    : todayChallenge.difficulty === "HARD"
+                      ? "text-risk bg-risk/10"
+                      : "text-gold bg-gold/10",
+                ].join(" ")}
+              >
+                {todayChallenge.difficulty}
+              </span>
+              <button
+                onClick={openEditToday}
+                className="bg-transparent text-text-secondary border border-white/[0.14] rounded-[8px] px-3.5 py-1.5 font-sans text-[12.5px] font-semibold cursor-pointer hover:border-white/25"
+              >
+                Edit
+              </button>
+              <button
+                onClick={handleDeleteToday}
+                disabled={isDeletingToday}
+                className="bg-transparent text-risk border border-risk/35 rounded-[8px] px-3.5 py-1.5 font-sans text-[12.5px] font-semibold cursor-pointer hover:bg-risk/10 disabled:opacity-50"
+              >
+                {isDeletingToday ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+          </div>
+          <p className="text-[13.5px] text-text-secondary leading-[1.55]">
+            {todayChallenge.description}
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-col gap-1">
         <h2 className="font-serif font-normal text-[1.7rem] text-text-primary">
           Create a challenge
@@ -610,6 +740,152 @@ export function ChallengesClient({ courseId, defaultDate, languageTag }: Props) 
           </div>
         </div>
       )}
+
+      {editingToday && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center px-4"
+          style={{ background: "rgba(8,8,10,0.62)" }}
+          onClick={() => !isSavingTodayEdit && setEditingToday(null)}
+        >
+          <div
+            className="w-full max-w-[560px] max-h-[86vh] overflow-y-auto bg-surface border border-white/[0.08] rounded-[16px] p-[24px] flex flex-col gap-[18px]"
+            style={{ animation: "csFade .18s ease" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex flex-col gap-1">
+              <h3 className="font-serif font-normal text-[1.35rem] text-text-primary">
+                Edit today&apos;s challenge
+              </h3>
+              <p className="text-sm text-text-muted">
+                Changes go live for students immediately.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                TITLE
+              </label>
+              <input
+                value={editingToday.title}
+                onChange={(e) =>
+                  setEditingToday((d) => (d ? { ...d, title: e.target.value } : d))
+                }
+                className="bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[13px] py-[11px] font-sans text-[14px] outline-none"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                DESCRIPTION
+              </label>
+              <textarea
+                value={editingToday.description}
+                onChange={(e) =>
+                  setEditingToday((d) => (d ? { ...d, description: e.target.value } : d))
+                }
+                className="min-h-[120px] resize-y bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[15px] py-[13px] font-sans text-[14px] leading-[1.6] outline-none"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                DIFFICULTY
+              </label>
+              <div className="flex gap-[7px] flex-wrap">
+                {(["EASY", "MEDIUM", "HARD"] as Difficulty[]).map((d) => (
+                  <button
+                    key={d}
+                    onClick={() =>
+                      setEditingToday((cur) => (cur ? { ...cur, difficulty: d } : cur))
+                    }
+                    className={[
+                      "px-3.5 py-1.5 rounded-[8px] font-mono text-[12px] border transition-colors cursor-pointer",
+                      editingToday.difficulty === d
+                        ? "bg-gold text-bg border-gold"
+                        : "bg-transparent text-text-muted border-white/10 hover:border-white/20",
+                    ].join(" ")}
+                  >
+                    {DIFF_LABELS[d]}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3.5 flex-wrap">
+              <div className="flex-1 min-w-[180px] flex flex-col gap-2">
+                <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                  TOPIC / WEEK TAG
+                </label>
+                <input
+                  value={editingToday.topicTag}
+                  onChange={(e) =>
+                    setEditingToday((d) => (d ? { ...d, topicTag: e.target.value } : d))
+                  }
+                  className="bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[13px] py-[11px] font-mono text-[13px] outline-none"
+                />
+              </div>
+              <div className="flex-1 min-w-[160px] flex flex-col gap-2">
+                <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                  SCHEDULE DATE
+                </label>
+                <input
+                  type="date"
+                  value={editingToday.schedDate}
+                  onChange={(e) =>
+                    setEditingToday((d) => (d ? { ...d, schedDate: e.target.value } : d))
+                  }
+                  className="bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[13px] py-[10px] font-mono text-[13px] outline-none [color-scheme:dark]"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                STARTER CODE
+              </label>
+              <textarea
+                value={editingToday.starter}
+                onChange={(e) =>
+                  setEditingToday((d) => (d ? { ...d, starter: e.target.value } : d))
+                }
+                spellCheck={false}
+                className="min-h-[140px] resize-y bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[15px] py-[13px] font-mono text-[13px] leading-[1.65] outline-none"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2.5 pt-1">
+              <button
+                onClick={() => setEditingToday(null)}
+                disabled={isSavingTodayEdit}
+                className="bg-transparent text-[#D7D5CE] border border-white/[0.14] rounded-[9px] px-[18px] py-[10px] font-sans text-[13.5px] font-semibold cursor-pointer hover:border-white/25 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveTodayEdit}
+                disabled={isSavingTodayEdit}
+                className="bg-gold text-bg border-none rounded-[9px] px-5 py-[10px] font-sans text-[13.5px] font-semibold cursor-pointer hover:brightness-105 transition-all disabled:opacity-60"
+              >
+                {isSavingTodayEdit ? "Saving…" : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        title="Delete today's challenge?"
+        message={
+          todayChallenge
+            ? `"${todayChallenge.title}" will be removed and students will no longer see it.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        danger
+        onConfirm={handleDeleteTodayConfirm}
+        onCancel={() => setDeleteDialogOpen(false)}
+      />
 
       {toast && (
         <div

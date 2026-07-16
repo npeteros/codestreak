@@ -64,3 +64,34 @@ export async function createChallenge(
   });
   return ref.id;
 }
+
+export async function updateChallenge(
+  courseId: string,
+  challengeId: string,
+  data: {
+    title: string;
+    description: string;
+    difficulty: ChallengeDifficulty;
+    topicTag: string;
+    starterCode: string;
+    scheduledFor: Date;
+    isDraft: boolean;
+  }
+): Promise<void> {
+  await challengesCol(courseId).doc(challengeId).update({
+    title: data.title,
+    description: data.description,
+    difficulty: data.difficulty,
+    topicTag: data.topicTag,
+    starterCode: data.starterCode,
+    scheduledFor: Timestamp.fromDate(data.scheduledFor),
+    isDraft: data.isDraft,
+  });
+}
+
+export async function deleteChallenge(
+  courseId: string,
+  challengeId: string
+): Promise<void> {
+  await challengesCol(courseId).doc(challengeId).delete();
+}
