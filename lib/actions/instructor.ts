@@ -278,7 +278,7 @@ export async function getClassOverview(courseId: string): Promise<
     )
       activeToday++;
 
-    const days = lastActiveDays(entryMap);
+    const days = lastActiveDays(entryMap, today);
     if (days >= AT_RISK_DAYS)
       atRiskStudents.push({ id: sid, name, initials: initials(name), lastDays: days });
   }
@@ -343,7 +343,7 @@ export async function getRoster(courseId: string): Promise<
       for (const { id, data } of streakEntries) entryMap.set(id, data);
 
       const streak = calcStreak(entryMap, today);
-      const days = lastActiveDays(entryMap);
+      const days = lastActiveDays(entryMap, today);
 
       return {
         id: sid,
@@ -402,7 +402,7 @@ export async function getStudentDetail(
   for (const { id, data } of streakEntries) entryMap.set(id, data);
 
   const streak = calcStreak(entryMap, today);
-  const days = lastActiveDays(entryMap);
+  const days = lastActiveDays(entryMap, today);
   const heatmap = buildStudentHeatmap(entryMap, today, 12);
 
   const todo = sprintCards.filter((c) => c.status === "TODO").length;

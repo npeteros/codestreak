@@ -107,6 +107,7 @@ export function getTotalActiveDays(
 // Days since the most recent active day; 999 if there has never been one.
 export function getLastActiveDays(
   entryMap: Map<string, StreakEntryDoc>,
+  todayStr: string,
   rules: StreakRules
 ): number {
   const dates = [...entryMap.entries()]
@@ -115,8 +116,9 @@ export function getLastActiveDays(
     .sort()
     .reverse();
   if (!dates[0]) return 999;
-  const ms = Date.now() - new Date(dates[0] + "T12:00:00Z").getTime();
-  return Math.floor(ms / 86_400_000);
+  const today = new Date(todayStr + "T12:00:00Z");
+  const last = new Date(dates[0] + "T12:00:00Z");
+  return Math.floor((today.getTime() - last.getTime()) / 86_400_000);
 }
 
 // `days` heatmap levels ending on todayStr, chronological ascending.

@@ -42,7 +42,15 @@ describe("calcStreak / lastActiveDays / heatmapLevel (lib/actions/instructor.ts)
   it("returns 0 / 999 sentinel for an empty entry map", () => {
     const map = mapFrom({});
     expect(calcStreak(map, TODAY)).toBe(0);
-    expect(lastActiveDays(map)).toBe(999);
+    expect(lastActiveDays(map, TODAY)).toBe(999);
+  });
+
+  it("computes lastActiveDays from todayStr, not wall-clock time (regression: used to drift by a day depending on the hour the request ran)", () => {
+    const activeToday = mapFrom({ [TODAY]: entry({ checkin: true }) });
+    expect(lastActiveDays(activeToday, TODAY)).toBe(0);
+
+    const activeYesterday = mapFrom({ "2026-07-14": entry({ checkin: true }) });
+    expect(lastActiveDays(activeYesterday, TODAY)).toBe(1);
   });
 
   it("does not break the streak when today has no activity yet", () => {
@@ -56,7 +64,7 @@ describe("calcStreak / lastActiveDays / heatmapLevel (lib/actions/instructor.ts)
   it("treats an entry doc with all sources false as inactive", () => {
     const map = mapFrom({ [TODAY]: entry() });
     expect(calcStreak(map, TODAY)).toBe(0);
-    expect(lastActiveDays(map)).toBe(999);
+    expect(lastActiveDays(map, TODAY)).toBe(999);
   });
 
   it("buckets heatmap level as 0/2/3/4 (never 1), and 0 when no doc exists for the date", () => {

@@ -27,8 +27,11 @@ export function calcStreak(
   return getCurrentStreak(entryMap, todayStr, ALL_SOURCES_RULE);
 }
 
-export function lastActiveDays(entryMap: Map<string, StreakEntryDoc>): number {
-  return getLastActiveDays(entryMap, ALL_SOURCES_RULE);
+export function lastActiveDays(
+  entryMap: Map<string, StreakEntryDoc>,
+  todayStr: string
+): number {
+  return getLastActiveDays(entryMap, todayStr, ALL_SOURCES_RULE);
 }
 
 export function heatmapLevel(entryMap: Map<string, StreakEntryDoc>, date: string): number {
