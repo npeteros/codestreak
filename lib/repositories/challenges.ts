@@ -38,6 +38,19 @@ export async function getScheduledChallenge(
   return { id: doc.id, data: doc.data() as ChallengeDoc };
 }
 
+export async function getLatestDraftChallenge(
+  courseId: string
+): Promise<{ id: string; data: ChallengeDoc } | null> {
+  const snap = await challengesCol(courseId)
+    .where("isDraft", "==", true)
+    .orderBy("createdAt", "desc")
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  const doc = snap.docs[0];
+  return { id: doc.id, data: doc.data() as ChallengeDoc };
+}
+
 export async function createChallenge(
   courseId: string,
   data: {

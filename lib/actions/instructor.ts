@@ -743,6 +743,46 @@ export async function createInstructorChallenge(
   return { success: true, id };
 }
 
+export type DraftInstructorChallenge = {
+  id: string;
+  title: string;
+  description: string;
+  difficulty: "EASY" | "MEDIUM" | "HARD";
+  topicTag: string;
+  starterCode: string;
+  scheduledFor: string;
+};
+
+export async function getLatestDraftChallenge(
+  courseId: string
+): Promise<
+  | { success: true; challenge: DraftInstructorChallenge | null }
+  | { success: false; error: string }
+> {
+  const uid = await verifyInstructor();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  const course = await getCourse(uid, courseId);
+  if (!course) return { success: false, error: "no_course" };
+
+  const draft = await challengesRepo.getLatestDraftChallenge(course.id);
+  if (!draft) return { success: true, challenge: null };
+
+  const { id, data } = draft;
+  return {
+    success: true,
+    challenge: {
+      id,
+      title: data.title,
+      description: data.description,
+      difficulty: data.difficulty,
+      topicTag: data.topicTag,
+      starterCode: data.starterCode,
+      scheduledFor: data.scheduledFor.toDate().toISOString().slice(0, 10),
+    },
+  };
+}
+
 export type TodayInstructorChallenge = {
   id: string;
   title: string;

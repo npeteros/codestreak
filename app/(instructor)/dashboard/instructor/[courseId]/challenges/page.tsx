@@ -1,5 +1,9 @@
 import { redirect } from "next/navigation";
-import { getSettings, getTodayInstructorChallenge } from "@/lib/actions/instructor";
+import {
+  getSettings,
+  getTodayInstructorChallenge,
+  getLatestDraftChallenge,
+} from "@/lib/actions/instructor";
 import { ChallengesClient } from "@/app/(instructor)/_components/ChallengesClient";
 
 export default async function InstructorChallengesPage({
@@ -25,7 +29,10 @@ export default async function InstructorChallengesPage({
   }
 
   const today = new Date().toISOString().slice(0, 10);
-  const todayResult = await getTodayInstructorChallenge(courseId);
+  const [todayResult, draftResult] = await Promise.all([
+    getTodayInstructorChallenge(courseId),
+    getLatestDraftChallenge(courseId),
+  ]);
 
   return (
     <ChallengesClient
@@ -34,6 +41,9 @@ export default async function InstructorChallengesPage({
       languageTag={result.settings.languageTag}
       initialTodayChallenge={
         todayResult.success ? todayResult.challenge : null
+      }
+      initialDraftChallenge={
+        draftResult.success ? draftResult.challenge : null
       }
     />
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   createInstructorChallenge,
   generateAiChallenges,
@@ -8,6 +8,7 @@ import {
   updateInstructorChallenge,
   deleteInstructorChallenge,
   type TodayInstructorChallenge,
+  type DraftInstructorChallenge,
 } from "@/lib/actions/instructor";
 import type { AiChallengeDraft } from "@/lib/services/openai/challengeGeneration";
 import { useToast } from "@/lib/hooks/useToast";
@@ -70,6 +71,7 @@ interface Props {
   defaultDate: string;
   languageTag: string;
   initialTodayChallenge: TodayInstructorChallenge | null;
+  initialDraftChallenge: DraftInstructorChallenge | null;
 }
 
 export function ChallengesClient({
@@ -77,6 +79,7 @@ export function ChallengesClient({
   defaultDate,
   languageTag,
   initialTodayChallenge,
+  initialDraftChallenge,
 }: Props) {
   const lang = languageMeta(languageTag);
   const [todayChallenge, setTodayChallenge] = useState(initialTodayChallenge);
@@ -92,12 +95,19 @@ export function ChallengesClient({
   const [isDeletingToday, setIsDeletingToday] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("manual");
-  const [difficulty, setDifficulty] = useState<Difficulty>("MEDIUM");
-  const [title, setTitle] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [starterCode, setStarterCode] = useState(lang.starter);
-  const [topicTag, setTopicTag] = useState("");
-  const [schedDate, setSchedDate] = useState(defaultDate);
+  const [draftId, setDraftId] = useState(initialDraftChallenge?.id ?? null);
+  const [difficulty, setDifficulty] = useState<Difficulty>(
+    initialDraftChallenge?.difficulty ?? "MEDIUM"
+  );
+  const [title, setTitle] = useState(initialDraftChallenge?.title ?? "");
+  const [prompt, setPrompt] = useState(initialDraftChallenge?.description ?? "");
+  const [starterCode, setStarterCode] = useState(
+    initialDraftChallenge?.starterCode ?? lang.starter
+  );
+  const [topicTag, setTopicTag] = useState(initialDraftChallenge?.topicTag ?? "");
+  const [schedDate, setSchedDate] = useState(
+    initialDraftChallenge?.scheduledFor ?? defaultDate
+  );
   const [aiTopic, setAiTopic] = useState("");
   const [aiDrafts, setAiDrafts] = useState<(AiChallengeDraft & { selected: boolean })[]>([]);
   const [generated, setGenerated] = useState(false);
@@ -113,6 +123,12 @@ export function ChallengesClient({
     schedDate: string;
   } | null>(null);
   const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  useEffect(() => {
+    if (initialDraftChallenge) {
+      showToast(`Loaded draft "${initialDraftChallenge.title}"`);
+    }
+  }, [initialDraftChallenge]);
 
   function toggleDraft(id: string) {
     setAiDrafts((ds) =>
@@ -140,7 +156,7 @@ export function ChallengesClient({
       if (!title.trim()) { showToast("Add a title first"); return; }
       if (!prompt.trim()) { showToast("Add a problem prompt first"); return; }
       startTransition(async () => {
-        const res = await createInstructorChallenge(courseId, {
+        const payload = {
           title,
           description: prompt,
           difficulty,
@@ -148,9 +164,13 @@ export function ChallengesClient({
           starterCode,
           scheduledFor: schedDate,
           isDraft: false,
-        });
+        };
+        const res = draftId
+          ? await updateInstructorChallenge(courseId, draftId, payload)
+          : await createInstructorChallenge(courseId, payload);
         if (res.success) {
           showToast(`Challenge scheduled for ${schedDate}`);
+          setDraftId(null);
           setTitle("");
           setPrompt("");
           setTopicTag("");
@@ -226,7 +246,7 @@ export function ChallengesClient({
       if (!title.trim()) { showToast("Add a title first"); return; }
       if (!prompt.trim()) { showToast("Add a problem prompt first"); return; }
       startTransition(async () => {
-        await createInstructorChallenge(courseId, {
+        const payload = {
           title,
           description: prompt,
           difficulty,
@@ -234,7 +254,13 @@ export function ChallengesClient({
           starterCode,
           scheduledFor: schedDate,
           isDraft: true,
-        });
+        };
+        if (draftId) {
+          await updateInstructorChallenge(courseId, draftId, payload);
+        } else {
+          const res = await createInstructorChallenge(courseId, payload);
+          if (res.success && res.id) setDraftId(res.id);
+        }
         showToast("Saved as draft");
       });
     } else {
