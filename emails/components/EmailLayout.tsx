@@ -11,7 +11,7 @@ import {
   Row,
   Section,
   Text,
-} from "@react-email/components";
+} from "react-email";
 import type { ReactNode } from "react";
 
 // CodeStreak brand palette — kept in sync with app/globals.css's @theme block.

@@ -111,9 +111,9 @@ the OpenAI SDK.
   dev works without real credentials — sent mail is logged with an Ethereal
   preview URL instead of hitting a real inbox.
 - **`send.ts`** — `sendEmail({ to, subject, react })`, which renders a
-  react-email component to HTML via `@react-email/render` and hands it to
-  the transporter. Throws on failure; callers fire-and-forget with `.catch`,
-  same as every other side effect in this codebase.
+  react-email component to HTML via `render` from `react-email` and hands it
+  to the transporter. Throws on failure; callers fire-and-forget with
+  `.catch`, same as every other side effect in this codebase.
 
 Templates live in the top-level `emails/` directory (react-email's
 convention, and where its `email dev` preview CLI — `npm run email:dev` —

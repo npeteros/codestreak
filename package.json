@@ -14,8 +14,6 @@
     "email:dev": "email dev --dir emails"
   },
   "dependencies": {
-    "@react-email/components": "^1.0.12",
-    "@react-email/render": "^2.1.0",
     "firebase": "^12.15.0",
     "firebase-admin": "^14.1.0",
     "html-to-image": "^1.11.13",

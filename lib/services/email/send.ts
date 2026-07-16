@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { render } from "@react-email/render";
+import { render } from "react-email";
 import nodemailer from "nodemailer";
 import { getMailer } from "@/lib/services/email/client";
 
