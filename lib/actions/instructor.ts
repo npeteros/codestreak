@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import type { CourseDoc, StreakEntryDoc } from "@/lib/firebase/types";
 import { requireRole } from "@/lib/auth/session";
 import { initials } from "@/lib/format";
@@ -569,8 +570,10 @@ export async function nudgeStudent(
   if (!(await enrollmentsRepo.isEnrolled(courseId, studentId)))
     return { success: false, error: "not_enrolled" };
 
-  notifyStudentNudged(courseId, studentId).catch((err) =>
-    console.error("[notifications] notifyStudentNudged failed:", err)
+  after(() =>
+    notifyStudentNudged(courseId, studentId).catch((err) =>
+      console.error("[notifications] notifyStudentNudged failed:", err)
+    )
   );
 
   return { success: true };
@@ -730,8 +733,10 @@ export async function createInstructorChallenge(
   });
 
   if (!data.isDraft) {
-    notifyChallengeCreated(course.id, id).catch((err) =>
-      console.error("[notifications] notifyChallengeCreated failed:", err)
+    after(() =>
+      notifyChallengeCreated(course.id, id).catch((err) =>
+        console.error("[notifications] notifyChallengeCreated failed:", err)
+      )
     );
   }
 

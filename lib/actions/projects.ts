@@ -1,5 +1,6 @@
 "use server";
 
+import { after } from "next/server";
 import type { ProjectDoc, ProjectScope, SprintTaskDoc, SprintTaskStatus, UserRole } from "@/lib/firebase/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
 import { triggerJournalEntry } from "@/lib/actions/journal";
@@ -128,8 +129,10 @@ export async function createProject(
     createdBy: uid,
   });
 
-  notifyProjectCreated(courseId, id).catch((err) =>
-    console.error("[notifications] notifyProjectCreated failed:", err)
+  after(() =>
+    notifyProjectCreated(courseId, id).catch((err) =>
+      console.error("[notifications] notifyProjectCreated failed:", err)
+    )
   );
 
   return { success: true, id };
@@ -266,8 +269,10 @@ export async function createSprintTask(
   // Only cross-person case: an instructor adding a task to a student's board.
   // A student creating their own task shouldn't email themselves.
   if (access.role === "INSTRUCTOR") {
-    notifyTaskCreated(courseId, projectId, id, access.boardStudentId).catch((err) =>
-      console.error("[notifications] notifyTaskCreated failed:", err)
+    after(() =>
+      notifyTaskCreated(courseId, projectId, id, access.boardStudentId).catch((err) =>
+        console.error("[notifications] notifyTaskCreated failed:", err)
+      )
     );
   }
 
