@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import type { StreakData, StreakEntry } from "@/lib/actions/streak";
+import { ShareButton } from "./ShareButton";
 
-const HEAT_COLORS: Record<0 | 1 | 2 | 3 | 4, string> = {
+export const HEAT_COLORS: Record<0 | 1 | 2 | 3 | 4, string> = {
   0: "#1C1C21",
   1: "color-mix(in srgb, #F5C842 30%, #1C1C21)",
   2: "color-mix(in srgb, #F5C842 48%, #1C1C21)",
@@ -120,7 +121,14 @@ function Heatmap({ entries, weekCount }: { entries: StreakEntry[]; weekCount: nu
   );
 }
 
-export function StreakHeader({ streak, longest, activeDays, weekCount, entries }: StreakData) {
+export function StreakHeader({
+  streak,
+  longest,
+  activeDays,
+  weekCount,
+  entries,
+  courseId,
+}: StreakData & { courseId?: string }) {
   return (
     <section className="bg-surface border border-white/[0.07] rounded-[18px] px-[26px] py-6 flex flex-wrap gap-[30px] items-center justify-between">
       {/* Left: streak stats */}
@@ -138,6 +146,7 @@ export function StreakHeader({ streak, longest, activeDays, weekCount, entries }
         <div className="font-mono text-[11.5px] tracking-[.04em] text-text-muted">
           BEST {longest}&nbsp;&nbsp;·&nbsp;&nbsp;{activeDays} ACTIVE DAYS
         </div>
+        <ShareButton courseId={courseId} streak={streak} longest={longest} activeDays={activeDays} entries={entries} />
       </div>
 
       {/* Right: heatmap */}

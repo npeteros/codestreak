@@ -17,6 +17,8 @@ export function StreakHeaderLoader() {
   const [data, setData] = useState<StreakData | null>(null);
 
   useEffect(() => {
+    // Prevents a stale fetch (e.g. from a previous courseId) resolving after
+    // cleanup from overwriting state with out-of-order data.
     let cancelled = false;
     getStreakData(courseId).then((result) => {
       if (!cancelled) setData(result.success ? result.data : null);
@@ -27,5 +29,5 @@ export function StreakHeaderLoader() {
   }, [courseId]);
 
   if (!data) return <StreakHeaderSkeleton />;
-  return <StreakHeader {...data} />;
+  return <StreakHeader {...data} courseId={courseId} />;
 }
