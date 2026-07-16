@@ -868,6 +868,14 @@ export async function updateInstructorChallenge(
     isDraft: data.isDraft,
   });
 
+  if (existing.isDraft && !data.isDraft) {
+    after(() =>
+      notifyChallengeCreated(course.id, challengeId).catch((err) =>
+        console.error("[notifications] notifyChallengeCreated failed:", err)
+      )
+    );
+  }
+
   return { success: true };
 }
 
