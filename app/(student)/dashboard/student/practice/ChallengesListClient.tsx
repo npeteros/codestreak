@@ -46,13 +46,15 @@ export function ChallengesListClient({ courseId, challenges }: Props) {
               href={`/dashboard/student/practice/${c.id}?courseId=${courseId}`}
               className="flex flex-col gap-2.5 p-[18px] rounded-[14px] border border-white/[0.08] bg-surface hover:border-white/20 transition-colors no-underline"
             >
-              <div className="flex items-center gap-[9px] flex-wrap">
+              <div className="flex items-start gap-[9px] flex-col">
                 <span
                   className={`font-mono text-[11px] border rounded-full px-[10px] py-[2px] ${DIFFICULTY_COLORS[c.difficulty]}`}
                 >
                   {DIFFICULTY_LABEL[c.difficulty]}
                 </span>
-                <span className="font-mono text-[11px] text-text-muted">{c.topicTag}</span>
+                <span className="font-mono text-[11px] text-text-muted">
+                  {c.topicTag}
+                </span>
               </div>
               <div className="font-serif text-[18px] text-text-primary leading-[1.2]">
                 {c.title}

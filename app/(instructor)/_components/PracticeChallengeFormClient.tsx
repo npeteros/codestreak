@@ -15,6 +15,8 @@ import { useToast } from "@/lib/hooks/useToast";
 type Mode = "manual" | "ai";
 type Difficulty = "EASY" | "MEDIUM" | "HARD";
 
+const MAX_TOPIC_TAG_LENGTH = 60;
+
 const DIFF_LABELS: Record<Difficulty, string> = {
   EASY: "Easy",
   MEDIUM: "Medium",
@@ -105,6 +107,7 @@ export function PracticeChallengeFormClient({ courseId, languageTag, initialChal
     description: string;
     difficulty: Difficulty;
     starter: string;
+    topicTag: string;
   } | null>(null);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
 
@@ -152,7 +155,7 @@ export function PracticeChallengeFormClient({ courseId, languageTag, initialChal
             title: d.title,
             description: d.description,
             difficulty: (d.difficulty as Difficulty) || "MEDIUM",
-            topicTag: aiTopic.slice(0, 40),
+            topicTag: d.topicTag,
             starterCode: d.starter,
             isDraft: false,
           })
@@ -169,6 +172,7 @@ export function PracticeChallengeFormClient({ courseId, languageTag, initialChal
       description: c.description,
       difficulty: (c.difficulty as Difficulty) || "MEDIUM",
       starter: c.starter,
+      topicTag: c.topicTag,
     });
   }
 
@@ -181,7 +185,7 @@ export function PracticeChallengeFormClient({ courseId, languageTag, initialChal
       title: editingDraft.title,
       description: editingDraft.description,
       difficulty: editingDraft.difficulty,
-      topicTag: aiTopic.slice(0, 40),
+      topicTag: editingDraft.topicTag,
       starterCode: editingDraft.starter,
       isDraft: false,
     });
@@ -297,7 +301,8 @@ export function PracticeChallengeFormClient({ courseId, languageTag, initialChal
               </label>
               <input
                 value={topicTag}
-                onChange={(e) => setTopicTag(e.target.value)}
+                onChange={(e) => setTopicTag(e.target.value.slice(0, MAX_TOPIC_TAG_LENGTH))}
+                maxLength={MAX_TOPIC_TAG_LENGTH}
                 placeholder="Stacks"
                 className="bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[13px] py-[11px] font-mono text-[13px] outline-none placeholder:text-[#5f5d57]"
               />
@@ -513,6 +518,23 @@ export function PracticeChallengeFormClient({ courseId, languageTag, initialChal
                   setEditingDraft((d) => (d ? { ...d, description: e.target.value } : d))
                 }
                 className="min-h-[120px] resize-y bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[15px] py-[13px] font-sans text-[14px] leading-[1.6] outline-none"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2 max-w-[240px]">
+              <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                TOPIC TAG
+              </label>
+              <input
+                value={editingDraft.topicTag}
+                onChange={(e) =>
+                  setEditingDraft((d) =>
+                    d ? { ...d, topicTag: e.target.value.slice(0, MAX_TOPIC_TAG_LENGTH) } : d
+                  )
+                }
+                maxLength={MAX_TOPIC_TAG_LENGTH}
+                placeholder="Stacks"
+                className="bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[13px] py-[11px] font-mono text-[13px] outline-none placeholder:text-[#5f5d57]"
               />
             </div>
 
