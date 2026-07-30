@@ -34,6 +34,7 @@ export const metadata: Metadata = {
     siteName: "CodeStreak",
     type: "website",
     locale: "en_US",
+    url: "/",
     images: [
       {
         url: "/og-1200x630.png",
@@ -48,6 +49,9 @@ export const metadata: Metadata = {
     images: ["/og-1200x630.png"],
   },
   manifest: "/manifest.json",
+  icons: {
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 export const viewport: Viewport = {

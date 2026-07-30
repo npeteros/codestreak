@@ -4,7 +4,7 @@ if (!process.env.NEXT_PUBLIC_APP_URL) {
   throw new Error("NEXT_PUBLIC_APP_URL is not set in .env.local");
 }
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL;
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
 
 export function generateMetadata({
   title,
@@ -22,10 +22,13 @@ export function generateMetadata({
     title,
     description,
     openGraph: {
+      siteName: "CodeStreak",
+      type: "website",
+      locale: "en_US",
       title,
       description,
       url,
-      images: [{ url: ogImage }],
+      images: [{ url: ogImage, width: 1200, height: 630, alt: title }],
     },
     twitter: {
       title,
