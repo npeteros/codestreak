@@ -1,16 +1,20 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   deletePracticeChallenge,
-  listPracticeChallengesForInstructor,
+  listPracticeChallengesForInstructorPage,
   type PracticeChallengeRow,
 } from "@/lib/actions/instructor";
+import type { PracticeCursor } from "@/lib/domain/practiceMerge";
 import { useToast } from "@/lib/hooks/useToast";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { SearchInput } from "@/components/ui/SearchInput";
 
 type Difficulty = "EASY" | "MEDIUM" | "HARD";
+type DifficultyFilter = "ALL" | Difficulty;
+type SortDir = "desc" | "asc";
 
 function difficultyBadge(d: Difficulty) {
   return [
@@ -23,21 +27,74 @@ function difficultyBadge(d: Difficulty) {
   ].join(" ");
 }
 
-interface Props {
-  courseId: string;
-  initialChallenges: PracticeChallengeRow[];
+const selectClass =
+  "bg-surface border border-white/[0.08] rounded-[9px] px-3 py-[9px] font-sans text-[13.5px] text-text-primary outline-none focus:border-white/25 transition-colors cursor-pointer";
+
+interface Filters {
+  difficulty: DifficultyFilter;
+  sortDir: SortDir;
 }
 
-export function PracticeChallengeListClient({ courseId, initialChallenges }: Props) {
+interface Props {
+  courseId: string;
+  initialItems: PracticeChallengeRow[];
+  initialCursor: PracticeCursor;
+  initialHasMore: boolean;
+}
+
+export function PracticeChallengeListClient({
+  courseId,
+  initialItems,
+  initialCursor,
+  initialHasMore,
+}: Props) {
   const { toast, showToast } = useToast();
   const [isPending, startTransition] = useTransition();
-  const [challenges, setChallenges] = useState(initialChallenges);
+  const [items, setItems] = useState(initialItems);
+  const [cursor, setCursor] = useState(initialCursor);
+  const [hasMore, setHasMore] = useState(initialHasMore);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  async function refreshChallenges() {
-    const result = await listPracticeChallengesForInstructor(courseId);
-    if (result.success) setChallenges(result.challenges);
+  const [search, setSearch] = useState("");
+  const [difficulty, setDifficulty] = useState<DifficultyFilter>("ALL");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const requestId = useRef(0);
+
+  function fetchPage(reset: boolean, filters: Filters, cursorArg: PracticeCursor | null) {
+    const id = ++requestId.current;
+    startTransition(async () => {
+      const res = await listPracticeChallengesForInstructorPage(courseId, {
+        cursor: cursorArg ?? undefined,
+        difficulty: filters.difficulty === "ALL" ? undefined : filters.difficulty,
+        sortDir: filters.sortDir,
+      });
+      if (id !== requestId.current) return; // superseded by a newer request
+      if (res.success) {
+        setItems((prev) => (reset ? res.items : [...prev, ...res.items]));
+        setCursor(res.nextCursor);
+        setHasMore(res.hasMore);
+      }
+    });
+  }
+
+  function currentFilters(overrides: Partial<Filters> = {}): Filters {
+    return { difficulty, sortDir, ...overrides };
+  }
+
+  function loadMore() {
+    fetchPage(false, currentFilters(), cursor);
+  }
+
+  function handleDifficultyChange(next: DifficultyFilter) {
+    setDifficulty(next);
+    fetchPage(true, currentFilters({ difficulty: next }), null);
+  }
+
+  function handleSortChange(next: SortDir) {
+    setSortDir(next);
+    fetchPage(true, currentFilters({ sortDir: next }), null);
   }
 
   function handleDeleteConfirm() {
@@ -50,12 +107,23 @@ export function PracticeChallengeListClient({ courseId, initialChallenges }: Pro
       setDeletingId(null);
       if (res.success) {
         showToast("Challenge deleted");
-        refreshChallenges();
+        setItems((prev) => prev.filter((c) => c.id !== id));
       } else {
         showToast("Failed to delete — try again");
       }
     });
   }
+
+  const filtersActive = difficulty !== "ALL";
+  const searchTerm = search.trim().toLowerCase();
+  const visibleItems = searchTerm
+    ? items.filter(
+        (c) =>
+          c.title.toLowerCase().includes(searchTerm) ||
+          c.description.toLowerCase().includes(searchTerm) ||
+          c.topicTag.toLowerCase().includes(searchTerm)
+      )
+    : items;
 
   return (
     <div className="flex flex-col gap-[18px]" style={{ animation: "csFade .25s ease" }}>
@@ -74,15 +142,47 @@ export function PracticeChallengeListClient({ courseId, initialChallenges }: Pro
         </Link>
       </div>
 
-      {challenges.length === 0 ? (
+      <div className="flex items-center gap-2.5 flex-wrap">
+        <SearchInput value={search} onChange={setSearch} placeholder="Search loaded challenges…" />
+        <select
+          value={difficulty}
+          onChange={(e) => handleDifficultyChange(e.target.value as DifficultyFilter)}
+          className={selectClass}
+        >
+          <option value="ALL">All difficulties</option>
+          <option value="EASY">Easy</option>
+          <option value="MEDIUM">Medium</option>
+          <option value="HARD">Hard</option>
+        </select>
+        <select
+          value={sortDir}
+          onChange={(e) => handleSortChange(e.target.value as SortDir)}
+          className={selectClass}
+        >
+          <option value="desc">Newest first</option>
+          <option value="asc">Oldest first</option>
+        </select>
+      </div>
+
+      {searchTerm && hasMore && (
+        <p className="text-text-faint text-[12px] font-mono -mt-2">
+          Showing matches in the {items.length} loaded — Load more to search further.
+        </p>
+      )}
+
+      {visibleItems.length === 0 ? (
         <div className="bg-surface border border-white/[0.07] rounded-[15px] p-[22px]">
           <p className="text-text-muted text-sm m-0">
-            No challenges yet. Add one to get started.
+            {items.length === 0
+              ? filtersActive
+                ? "No challenges match your filters."
+                : "No challenges yet. Add one to get started."
+              : "No challenges match your search."}
           </p>
         </div>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3.5">
-          {challenges.map((c) => (
+          {visibleItems.map((c) => (
             <div
               key={c.id}
               className="flex flex-col gap-2.5 p-[18px] rounded-[14px] border border-white/[0.08] bg-surface"
@@ -108,6 +208,7 @@ export function PracticeChallengeListClient({ courseId, initialChallenges }: Pro
               <div className="font-serif text-[18px] text-text-primary leading-[1.2]">
                 {c.title}
               </div>
+              <span className="font-mono text-[11px] text-text-muted">{c.topicTag}</span>
               <div className="text-[13px] text-text-secondary leading-[1.55] line-clamp-3">
                 {c.description}
               </div>
@@ -129,6 +230,16 @@ export function PracticeChallengeListClient({ courseId, initialChallenges }: Pro
             </div>
           ))}
         </div>
+      )}
+
+      {hasMore && (
+        <button
+          onClick={loadMore}
+          disabled={isPending}
+          className="self-center bg-transparent text-gold border border-gold/35 rounded-[9px] px-5 py-[9px] font-sans text-[13px] font-semibold cursor-pointer hover:bg-gold/10 transition-colors disabled:opacity-50"
+        >
+          {isPending ? "Loading…" : "Load more"}
+        </button>
       )}
 
       <ConfirmDialog

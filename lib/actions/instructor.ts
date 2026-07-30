@@ -16,6 +16,14 @@ import * as challengesRepo from "@/lib/repositories/challenges";
 import { listSprintCards } from "@/lib/repositories/sprintCards";
 import { getStartOfDayUTC } from "@/lib/domain/time";
 import {
+  mergePracticePage,
+  INITIAL_PRACTICE_CURSOR,
+  type BranchItem,
+  type PracticeCursor,
+  type PracticeSortDir,
+} from "@/lib/domain/practiceMerge";
+import type { BrowsableChallengeOrigin } from "@/lib/repositories/challenges";
+import {
   calcStreak,
   lastActiveDays,
   buildStudentHeatmap,
@@ -946,6 +954,7 @@ export type PracticeChallengeRow = {
   starterCode: string;
   isDraft: boolean;
   origin: "PRACTICE" | "DAILY_ARCHIVE";
+  createdAt: string;
 };
 
 // A challenge can be managed from the Practice page if it's a practice
@@ -1097,14 +1106,45 @@ export async function getPracticeChallengeForInstructor(
       starterCode: data.starterCode,
       isDraft: data.isDraft,
       origin: data.kind === "PRACTICE" ? "PRACTICE" : "DAILY_ARCHIVE",
+      createdAt: data.createdAt.toDate().toISOString(),
     },
   };
 }
 
-export async function listPracticeChallengesForInstructor(
-  courseId: string
+interface PracticeMergeRow {
+  doc: ChallengeDoc;
+  origin: BrowsableChallengeOrigin;
+}
+
+function toPracticeBranchItems(
+  rows: Array<{ id: string; data: ChallengeDoc }>,
+  field: "createdAt" | "scheduledFor",
+  origin: BrowsableChallengeOrigin
+): BranchItem<PracticeMergeRow>[] {
+  return rows.map(({ id, data }) => ({
+    id,
+    sortValue: (field === "createdAt" ? data.createdAt : data.scheduledFor!).toDate().toISOString(),
+    data: { doc: data, origin },
+  }));
+}
+
+export interface ListPracticeChallengesForInstructorPageParams {
+  cursor?: PracticeCursor | null;
+  difficulty?: "EASY" | "MEDIUM" | "HARD";
+  sortDir?: PracticeSortDir;
+}
+
+export async function listPracticeChallengesForInstructorPage(
+  courseId: string,
+  params: ListPracticeChallengesForInstructorPageParams = {}
 ): Promise<
-  { success: true; challenges: PracticeChallengeRow[] } | { success: false; error: string }
+  | {
+      success: true;
+      items: PracticeChallengeRow[];
+      nextCursor: PracticeCursor;
+      hasMore: boolean;
+    }
+  | { success: false; error: string }
 > {
   const uid = await verifyInstructor();
   if (!uid) return { success: false, error: "unauthenticated" };
@@ -1113,19 +1153,59 @@ export async function listPracticeChallengesForInstructor(
   if (!course) return { success: false, error: "no_course" };
 
   const cutoff = getStartOfDayUTC(course.data.timezone);
-  const rows = await challengesRepo.listManageablePracticeChallenges(course.id, cutoff);
+  const sortDir = params.sortDir ?? "desc";
+  const prevCursor = params.cursor ?? INITIAL_PRACTICE_CURSOR;
 
-  return {
-    success: true,
-    challenges: rows.map(({ id, data, origin }) => ({
-      id,
-      title: data.title,
-      description: data.description,
-      difficulty: data.difficulty,
-      topicTag: data.topicTag,
-      starterCode: data.starterCode,
-      isDraft: data.isDraft,
-      origin,
-    })),
-  };
+  const wantPractice = !prevCursor.practiceDone;
+  const wantDaily = !prevCursor.dailyDone;
+
+  const [practiceRows, dailyRows] = await Promise.all([
+    wantPractice
+      ? challengesRepo.listPracticeChallengesPage(course.id, {
+          limit: HISTORY_PAGE_SIZE + 1,
+          cursor: prevCursor.practice,
+          // instructors manage drafts too — no isDraft filter, both included.
+          difficulty: params.difficulty,
+          sortDir,
+        })
+      : Promise.resolve([]),
+    wantDaily
+      ? challengesRepo.listArchivedDailyChallengesPage(course.id, cutoff, {
+          limit: HISTORY_PAGE_SIZE + 1,
+          cursor: prevCursor.daily,
+          difficulty: params.difficulty,
+          sortDir,
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const merged = mergePracticePage(
+    HISTORY_PAGE_SIZE,
+    sortDir,
+    {
+      items: toPracticeBranchItems(practiceRows, "createdAt", "PRACTICE"),
+      requestedLimit: wantPractice ? HISTORY_PAGE_SIZE + 1 : 0,
+    },
+    {
+      items: toPracticeBranchItems(dailyRows, "scheduledFor", "DAILY_ARCHIVE"),
+      requestedLimit: wantDaily ? HISTORY_PAGE_SIZE + 1 : 0,
+    },
+    prevCursor
+  );
+
+  const items: PracticeChallengeRow[] = merged.items.map(({ id, data }) => ({
+    id,
+    title: data.doc.title,
+    description: data.doc.description,
+    difficulty: data.doc.difficulty,
+    topicTag: data.doc.topicTag,
+    starterCode: data.doc.starterCode,
+    isDraft: data.doc.isDraft,
+    origin: data.origin,
+    createdAt: data.doc.createdAt.toDate().toISOString(),
+  }));
+
+  const hasMore = !merged.nextCursor.practiceDone || !merged.nextCursor.dailyDone;
+
+  return { success: true, items, nextCursor: merged.nextCursor, hasMore };
 }

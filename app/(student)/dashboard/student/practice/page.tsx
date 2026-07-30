@@ -1,6 +1,7 @@
 import { requireUidOrRedirect } from "@/lib/auth/session";
 import { listEnrolledCourses } from "@/lib/repositories/studentHub";
-import { listPracticeChallenges } from "@/lib/actions/practiceChallenges";
+import { listPracticeChallengesPage } from "@/lib/actions/practiceChallenges";
+import { INITIAL_PRACTICE_CURSOR } from "@/lib/domain/practiceMerge";
 import { ChallengesListClient } from "./ChallengesListClient";
 
 export default async function StudentChallengesPage({
@@ -33,12 +34,14 @@ export default async function StudentChallengesPage({
     );
   }
 
-  const challengesResult = await listPracticeChallenges(courseId);
+  const result = await listPracticeChallengesPage(courseId);
 
   return (
     <ChallengesListClient
       courseId={courseId}
-      challenges={challengesResult.success ? challengesResult.challenges : []}
+      initialItems={result.success ? result.items : []}
+      initialCursor={result.success ? result.nextCursor : INITIAL_PRACTICE_CURSOR}
+      initialHasMore={result.success ? result.hasMore : false}
     />
   );
 }

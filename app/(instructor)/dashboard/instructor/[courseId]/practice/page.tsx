@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { getSettings, listPracticeChallengesForInstructor } from "@/lib/actions/instructor";
+import { getSettings, listPracticeChallengesForInstructorPage } from "@/lib/actions/instructor";
+import { INITIAL_PRACTICE_CURSOR } from "@/lib/domain/practiceMerge";
 import { PracticeChallengeListClient } from "@/app/(instructor)/_components/PracticeChallengeListClient";
 
 export default async function PracticeChallengesPage({
@@ -24,12 +25,14 @@ export default async function PracticeChallengesPage({
     );
   }
 
-  const challengesResult = await listPracticeChallengesForInstructor(courseId);
+  const challengesResult = await listPracticeChallengesForInstructorPage(courseId);
 
   return (
     <PracticeChallengeListClient
       courseId={courseId}
-      initialChallenges={challengesResult.success ? challengesResult.challenges : []}
+      initialItems={challengesResult.success ? challengesResult.items : []}
+      initialCursor={challengesResult.success ? challengesResult.nextCursor : INITIAL_PRACTICE_CURSOR}
+      initialHasMore={challengesResult.success ? challengesResult.hasMore : false}
     />
   );
 }
