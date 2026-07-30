@@ -1,31 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import dynamic from "next/dynamic";
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { submitPracticeAttempt } from "@/lib/actions/practiceChallenges";
 import type { PracticeChallengeDetail } from "@/lib/actions/practiceChallenges";
-
-const Markdown = dynamic(() => import("@/components/ui/Markdown"));
+import { ChallengeView } from "@/components/challenges/ChallengeView";
 
 interface Props {
   courseId: string;
   challengeId: string;
   challenge: PracticeChallengeDetail | null;
 }
-
-const DIFFICULTY_LABEL: Record<string, string> = {
-  EASY: "Easy",
-  MEDIUM: "Medium",
-  HARD: "Hard",
-};
-
-const DIFFICULTY_COLORS: Record<string, string> = {
-  EASY: "text-green-400 border-green-400/40",
-  MEDIUM: "text-gold border-gold/40",
-  HARD: "text-red-400 border-red-400/40",
-};
 
 export function PracticeChallengeClient({ courseId, challengeId, challenge }: Props) {
   const [code, setCode] = useState(challenge?.starterCode ?? "");
@@ -82,28 +68,12 @@ export function PracticeChallengeClient({ courseId, challengeId, challenge }: Pr
       </div>
 
       <div className="flex gap-4 flex-wrap items-stretch">
-        <div className="flex-[1_1_300px] min-w-[280px] bg-surface border border-white/[0.07] rounded-[15px] p-[22px] flex flex-col gap-[14px]">
-          <div className="flex items-center gap-[9px]">
-            <span
-              className={`font-mono text-[11px] border rounded-full px-[10px] py-[2px] ${DIFFICULTY_COLORS[challenge.difficulty]}`}
-            >
-              {DIFFICULTY_LABEL[challenge.difficulty]}
-            </span>
-            <span className="font-mono text-[11px] text-text-muted">
-              {challenge.topicTag}
-            </span>
-          </div>
-
-          <h2 className="font-serif text-[25px] text-text-primary font-normal leading-[1.1] m-0">
-            {challenge.title}
-          </h2>
-
-          <div className="max-h-90 overflow-y-auto pr-1 -mr-1">
-            <div className="markdown-body text-[14.5px] text-[#C2C0B9] leading-[1.7]">
-              <Markdown>{challenge.description}</Markdown>
-            </div>
-          </div>
-        </div>
+        <ChallengeView
+          title={challenge.title}
+          difficulty={challenge.difficulty}
+          topicTag={challenge.topicTag}
+          description={challenge.description}
+        />
 
         <div className="flex-[1.3_1_340px] min-w-[300px] flex flex-col border border-white/[0.08] rounded-[15px] overflow-hidden bg-code-bg">
           <div className="flex items-center justify-between px-[15px] py-[11px] bg-[#131316] border-b border-white/[0.07]">

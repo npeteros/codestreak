@@ -1,6 +1,7 @@
-import Link from "next/link";
 import { generateMetadata } from "@/lib/seo/metadata";
-import { Logomark } from "@/components/brand/Logomark";
+import { getLandingPageData } from "@/lib/actions/publicCatalog";
+import { getCurrentUser } from "@/lib/auth/session";
+import { LandingClient } from "@/app/_components/LandingClient";
 
 export const metadata = generateMetadata({
   title: "CodeStreak",
@@ -9,39 +10,13 @@ export const metadata = generateMetadata({
   path: "/",
 });
 
-// The already-logged-in redirect lives in proxy.ts (decodes the JWT role
-// claim, no Firestore read) so this page has no runtime dependency and can
-// render statically instead of paying a cookie-verify + Firestore read on
-// every anonymous visit to the app's highest-traffic route.
-export default function Home() {
-  return (
-    <div className="min-h-screen bg-bg flex flex-col items-center justify-center gap-8 p-8">
-      <div className="flex items-center gap-3">
-        <Logomark className="w-9 h-9" />
-        <span className="font-serif text-[2rem] text-text-primary tracking-[-0.01em]">
-          CodeStreak
-        </span>
-      </div>
+// Course/enrollment counts are fetched from Firestore, so this route can no
+// longer render as pure static HTML — ISR keeps it cheap on the app's
+// highest-traffic anonymous route by revalidating in the background at most
+// once every 5 minutes instead of on every request.
+export const revalidate = 300;
 
-      <p className="text-text-muted text-center max-w-sm leading-relaxed">
-        Course-based accountability for programming students. Four modules, one
-        streak.
-      </p>
-
-      <div className="flex gap-4">
-        <Link
-          href="/login"
-          className="px-6 py-3 rounded-xl border border-white/10 text-text-secondary hover:text-text-primary hover:border-white/20 transition-colors font-medium text-sm"
-        >
-          Log in
-        </Link>
-        <Link
-          href="/signup"
-          className="px-6 py-3 rounded-xl bg-gold text-bg font-semibold hover:brightness-110 transition-all text-sm"
-        >
-          Get started
-        </Link>
-      </div>
-    </div>
-  );
+export default async function Home() {
+  const [{ data }, user] = await Promise.all([getLandingPageData(), getCurrentUser()]);
+  return <LandingClient data={data} user={user} />;
 }

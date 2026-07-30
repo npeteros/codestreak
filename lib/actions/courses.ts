@@ -124,50 +124,6 @@ export async function joinCourse(
   return { success: true };
 }
 
-export async function getPublicCourses(): Promise<
-  | {
-      success: true;
-      courses: Array<{
-        id: string;
-        name: string;
-        description: string;
-        languageTag: string;
-        enrolledCount: number;
-      }>;
-    }
-  | { success: false; error: string }
-> {
-  const uid = await getVerifiedStudent();
-  if (!uid) return { success: false, error: "unauthenticated" };
-
-  const [publicCourses, hub] = await Promise.all([
-    coursesRepo.listPublicActiveCourses(),
-    studentHubRepo.listEnrolledCourses(uid),
-  ]);
-
-  const joinedIds = new Set(hub.map((h) => h.id));
-
-  const filtered = publicCourses
-    .filter((c) => !joinedIds.has(c.id))
-    .sort((a, b) => {
-      const at = a.data.createdAt?.toMillis() ?? 0;
-      const bt = b.data.createdAt?.toMillis() ?? 0;
-      return bt - at;
-    });
-
-  const courses = await Promise.all(
-    filtered.map(async ({ id, data }) => ({
-      id,
-      name: data.name,
-      description: data.description,
-      languageTag: data.languageTag,
-      enrolledCount: await enrollmentsRepo.countEnrollments(id),
-    }))
-  );
-
-  return { success: true, courses };
-}
-
 export async function joinPublicCourse(
   courseId: string
 ): Promise<{ success: boolean; error?: string }> {
