@@ -54,7 +54,7 @@ export function CoursesHomeClient({ initialCourses, startWithForm }: Props) {
         description,
         languageTag: language,
         timezone,
-        streakRules: { challenge: true, checkin: true, sprintCard: true },
+        streakRules: { challenge: true, checkin: true, sprintCard: true, practice: true },
       });
       if (!res.success) { showToast("Failed to create course — try again"); return; }
       router.push(`/dashboard/instructor/${res.courseId}`);

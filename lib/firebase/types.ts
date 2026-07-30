@@ -2,6 +2,7 @@ import type { Timestamp } from "firebase-admin/firestore";
 
 export type UserRole = "INSTRUCTOR" | "STUDENT";
 export type ChallengeDifficulty = "EASY" | "MEDIUM" | "HARD";
+export type ChallengeKind = "DAILY" | "PRACTICE";
 export type SprintCardStatus = "TODO" | "IN_PROGRESS" | "DONE";
 export type JournalTriggerType = "CHALLENGE" | "CHECKIN" | "SPRINT_CARD";
 
@@ -19,6 +20,7 @@ export interface StreakRules {
   challenge: boolean;
   checkin: boolean;
   sprintCard: boolean;
+  practice: boolean;
 }
 
 export interface CourseDoc {
@@ -47,7 +49,8 @@ export interface ChallengeDoc {
   difficulty: ChallengeDifficulty;
   topicTag: string;
   starterCode: string;
-  scheduledFor: Timestamp;
+  scheduledFor?: Timestamp; // meaningful only for kind:"DAILY" — practice challenges omit it
+  kind: ChallengeKind;
   isAiGenerated: boolean;
   isDraft: boolean;
   createdAt: Timestamp;
@@ -65,6 +68,15 @@ export interface MilestoneDoc {
 
 // /students/{uid}/courses/{courseId}/challengeSubmissions/{submissionId}
 export interface ChallengeSubmissionDoc {
+  challengeId: string;
+  code: string;
+  submittedAt: Timestamp;
+}
+
+// /students/{uid}/courses/{courseId}/challengeAttempts/{attemptId}
+// One doc per submit — unlike ChallengeSubmissionDoc's upsert-by-challengeId,
+// practice attempts are never overwritten (unlimited retakes, each logged separately).
+export interface ChallengeAttemptDoc {
   challengeId: string;
   code: string;
   submittedAt: Timestamp;
@@ -133,6 +145,7 @@ export interface StreakEntryDoc {
     challenge: boolean;
     checkin: boolean;
     sprintCard: boolean;
+    practice: boolean;
   };
 }
 

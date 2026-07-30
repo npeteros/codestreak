@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useParams } from "next/navigation";
-import { LayoutGrid, Code2, Users, BarChart3, Settings } from "lucide-react";
+import { LayoutGrid, Code2, Library, Users, BarChart3, Settings } from "lucide-react";
 import { MobileMoreSheet } from "@/components/ui/MobileMoreSheet";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 
@@ -15,7 +15,8 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { segment: "", label: "Overview", icon: LayoutGrid, exact: true },
-  { segment: "challenges", label: "Challenges", icon: Code2 },
+  { segment: "challenges", label: "Daily Challenge", icon: Code2 },
+  { segment: "practice", label: "Practice", icon: Library },
   { segment: "students", label: "Students", icon: Users },
   { segment: "sprint", label: "Sprint Board", icon: BarChart3 },
   { segment: "settings", label: "Settings", icon: Settings },

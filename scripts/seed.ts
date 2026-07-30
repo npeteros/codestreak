@@ -91,7 +91,7 @@ async function seed() {
     timezone: "America/New_York",
     inviteCode: "CS2011",
     instructorId: INSTRUCTOR_UID,
-    streakRules: { challenge: true, checkin: true, sprintCard: true },
+    streakRules: { challenge: true, checkin: true, sprintCard: true, practice: true },
     isArchived: false,
     isPublic: false,
     createdAt: ts(day("2026-03-01")),
@@ -574,17 +574,17 @@ async function seed() {
     [addDays(TODAY, -11), TODAY], // 12 days — current streak, ends today
   ];
 
-  type SourceFlags = { challenge: boolean; checkin: boolean; sprintCard: boolean };
+  type SourceFlags = { challenge: boolean; checkin: boolean; sprintCard: boolean; practice: boolean };
 
   // The last stretch gets real, per-day detail matching the challenges/
   // check-ins/tasks above; everything older is a simple daily check-in habit.
   const DETAILED_SOURCES: Record<string, SourceFlags> = {
-    [addDays(TODAY, -5)]: { challenge: false, checkin: true, sprintCard: false },
-    [addDays(TODAY, -4)]: { challenge: true, checkin: true, sprintCard: false },
-    [addDays(TODAY, -3)]: { challenge: true, checkin: true, sprintCard: false },
-    [addDays(TODAY, -2)]: { challenge: true, checkin: true, sprintCard: true },
-    [addDays(TODAY, -1)]: { challenge: true, checkin: true, sprintCard: false },
-    [TODAY]: { challenge: true, checkin: true, sprintCard: true },
+    [addDays(TODAY, -5)]: { challenge: false, checkin: true, sprintCard: false, practice: false },
+    [addDays(TODAY, -4)]: { challenge: true, checkin: true, sprintCard: false, practice: false },
+    [addDays(TODAY, -3)]: { challenge: true, checkin: true, sprintCard: false, practice: true },
+    [addDays(TODAY, -2)]: { challenge: true, checkin: true, sprintCard: true, practice: false },
+    [addDays(TODAY, -1)]: { challenge: true, checkin: true, sprintCard: false, practice: false },
+    [TODAY]: { challenge: true, checkin: true, sprintCard: true, practice: true },
   };
 
   const streakDates = ACTIVE_BLOCKS.flatMap(([s, e]) => eachDay(s, e));
@@ -612,6 +612,7 @@ async function seed() {
       challenge: false,
       checkin: true,
       sprintCard: false,
+      practice: false,
     };
     batch.set(studentCourseRef.collection("streakEntries").doc(date), {
       date,

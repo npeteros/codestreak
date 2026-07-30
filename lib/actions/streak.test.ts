@@ -3,7 +3,7 @@ import { computeStreakData } from "./streak.calc";
 import type { StreakEntryDoc, StreakRules } from "@/lib/firebase/types";
 
 const TODAY = "2026-07-15";
-const ALL_RULES: StreakRules = { challenge: true, checkin: true, sprintCard: true };
+const ALL_RULES: StreakRules = { challenge: true, checkin: true, sprintCard: true, practice: true };
 
 function entry(sources: Partial<StreakEntryDoc["sources"]> = {}): StreakEntryDoc {
   return {
@@ -12,6 +12,7 @@ function entry(sources: Partial<StreakEntryDoc["sources"]> = {}): StreakEntryDoc
       challenge: sources.challenge ?? false,
       checkin: sources.checkin ?? false,
       sprintCard: sources.sprintCard ?? false,
+      practice: sources.practice ?? false,
     },
   };
 }
@@ -71,7 +72,7 @@ describe("computeStreakData (lib/actions/streak.ts)", () => {
   });
 
   it("respects streakRules: a disabled source does not count toward the streak", () => {
-    const rules: StreakRules = { challenge: true, checkin: true, sprintCard: false };
+    const rules: StreakRules = { challenge: true, checkin: true, sprintCard: false, practice: true };
     const map = mapFrom({
       "2026-07-15": entry({ sprintCard: true }),
       "2026-07-14": entry({ sprintCard: true }),
@@ -82,12 +83,26 @@ describe("computeStreakData (lib/actions/streak.ts)", () => {
     expect(result.entries.find((e) => e.date === TODAY)?.level).toBe(0);
   });
 
-  it("buckets heatmap intensity as 0/2/3/4 (level 1 is never produced)", () => {
+  it("practice is a source like any other: counts toward the streak, and can be disabled via streakRules", () => {
+    const map = mapFrom({
+      "2026-07-15": entry({ practice: true }),
+      "2026-07-14": entry({ practice: true }),
+    });
+    expect(computeStreakData(map, ALL_RULES, TODAY).streak).toBe(2);
+
+    const rulesNoPractice: StreakRules = { challenge: true, checkin: true, sprintCard: true, practice: false };
+    const result = computeStreakData(map, rulesNoPractice, TODAY);
+    expect(result.streak).toBe(0);
+    expect(result.activeDays).toBe(0);
+  });
+
+  it("buckets heatmap intensity as 0/2/3/4 (level 1 is never produced, and a 4th active source still caps at 4)", () => {
     const map = mapFrom({
       "2026-07-15": entry({ checkin: true }),
       "2026-07-14": entry({ checkin: true, challenge: true }),
       "2026-07-13": entry({ checkin: true, challenge: true, sprintCard: true }),
       "2026-07-12": entry(),
+      "2026-07-11": entry({ checkin: true, challenge: true, sprintCard: true, practice: true }),
     });
     const result = computeStreakData(map, ALL_RULES, TODAY, 2);
     const level = (d: string) => result.entries.find((e) => e.date === d)?.level;
@@ -95,6 +110,7 @@ describe("computeStreakData (lib/actions/streak.ts)", () => {
     expect(level("2026-07-14")).toBe(3);
     expect(level("2026-07-13")).toBe(4);
     expect(level("2026-07-12")).toBe(0);
+    expect(level("2026-07-11")).toBe(4);
   });
 
   it("produces weekCount*7 chronologically-ascending cells ending on today", () => {

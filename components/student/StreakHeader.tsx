@@ -34,6 +34,7 @@ function formatSources(sources: StreakEntry["sources"]): string {
   if (sources.checkin) active.push("Check-in");
   if (sources.challenge) active.push("Challenge");
   if (sources.sprintCard) active.push("Sprint Card");
+  if (sources.practice) active.push("Practice");
   return active.length > 0 ? active.join(", ") : "No activity";
 }
 

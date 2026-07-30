@@ -14,6 +14,7 @@ function entry(sources: Partial<StreakEntryDoc["sources"]> = {}): StreakEntryDoc
       challenge: sources.challenge ?? false,
       checkin: sources.checkin ?? false,
       sprintCard: sources.sprintCard ?? false,
+      practice: sources.practice ?? false,
     },
   };
 }
@@ -38,6 +39,7 @@ describe("streak/heatmap streakRules divergence (pre-existing, preserved as-is)"
     challenge: true,
     checkin: true,
     sprintCard: false,
+    practice: true,
   };
 
   const mapEntry = entry({ sprintCard: true });
@@ -55,8 +57,8 @@ describe("streak/heatmap streakRules divergence (pre-existing, preserved as-is)"
     expect(calcStreak(map, TODAY)).toBe(2);
 
     const arrayEntries = [
-      { date: TODAY, sources: { challenge: false, checkin: false, sprintCard: true } },
-      { date: "2026-07-14", sources: { challenge: false, checkin: false, sprintCard: true } },
+      { date: TODAY, sources: { challenge: false, checkin: false, sprintCard: true, practice: false } },
+      { date: "2026-07-14", sources: { challenge: false, checkin: false, sprintCard: true, practice: false } },
     ];
     expect(getCurrentStreak(arrayEntries, TODAY)).toBe(2);
     expect(isActiveDay(arrayEntries[0])).toBe(true);
@@ -64,5 +66,25 @@ describe("streak/heatmap streakRules divergence (pre-existing, preserved as-is)"
 
   it("instructor.ts's heatmap level is non-zero even though the source is disabled for this course", () => {
     expect(heatmapLevel(map, TODAY)).toBeGreaterThan(0);
+  });
+
+  // Practice was added as a 4th source alongside challenge/checkin/sprintCard
+  // and goes through the exact same rules-parameterized isActiveDay — so the
+  // same divergence applies to it symmetrically.
+  it("the same divergence holds for the practice source", () => {
+    const rulesNoPractice: StreakRules = {
+      challenge: true,
+      checkin: true,
+      sprintCard: true,
+      practice: false,
+    };
+    const practiceMap = new Map<string, StreakEntryDoc>([
+      [TODAY, entry({ practice: true })],
+      ["2026-07-14", entry({ practice: true })],
+    ]);
+
+    expect(computeStreakData(practiceMap, rulesNoPractice, TODAY).streak).toBe(0);
+    expect(computeOverviewStreakData(practiceMap, rulesNoPractice, TODAY).streak).toBe(0);
+    expect(calcStreak(practiceMap, TODAY)).toBe(2);
   });
 });

@@ -17,6 +17,7 @@ function entry(sources: Partial<StreakEntryDoc["sources"]> = {}): StreakEntryDoc
       challenge: sources.challenge ?? false,
       checkin: sources.checkin ?? false,
       sprintCard: sources.sprintCard ?? false,
+      practice: sources.practice ?? false,
     },
   };
 }
@@ -36,6 +37,11 @@ function classMapFrom(
 describe("calcStreak / lastActiveDays / heatmapLevel (lib/actions/instructor.ts)", () => {
   it("is streakRules-blind — a single sprintCard-only day counts as active (unlike streak.ts/overview.ts)", () => {
     const map = mapFrom({ [TODAY]: entry({ sprintCard: true }) });
+    expect(calcStreak(map, TODAY)).toBe(1);
+  });
+
+  it("is streakRules-blind for practice too — a single practice-only day counts as active", () => {
+    const map = mapFrom({ [TODAY]: entry({ practice: true }) });
     expect(calcStreak(map, TODAY)).toBe(1);
   });
 

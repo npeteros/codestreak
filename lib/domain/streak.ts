@@ -19,6 +19,7 @@ export const ALL_SOURCES_RULE: StreakRules = {
   challenge: true,
   checkin: true,
   sprintCard: true,
+  practice: true,
 };
 
 export function isActiveDay(
@@ -28,10 +29,13 @@ export function isActiveDay(
   return (
     (rules.challenge && sources.challenge) ||
     (rules.checkin && sources.checkin) ||
-    (rules.sprintCard && sources.sprintCard)
+    (rules.sprintCard && sources.sprintCard) ||
+    (rules.practice && sources.practice)
   );
 }
 
+// n can now reach 4 (all sources active) — the final ternary branch already
+// caps every n >= 3 at level 4, so no bucket-boundary change was needed here.
 export function getHeatmapLevel(
   sources: StreakEntryDoc["sources"],
   rules: StreakRules
@@ -39,7 +43,8 @@ export function getHeatmapLevel(
   const n =
     (rules.challenge && sources.challenge ? 1 : 0) +
     (rules.checkin && sources.checkin ? 1 : 0) +
-    (rules.sprintCard && sources.sprintCard ? 1 : 0);
+    (rules.sprintCard && sources.sprintCard ? 1 : 0) +
+    (rules.practice && sources.practice ? 1 : 0);
   return n === 0 ? 0 : n === 1 ? 2 : n === 2 ? 3 : 4;
 }
 

@@ -185,6 +185,11 @@ export function SettingsClient({ settings }: Props) {
       label: "Sprint card",
       desc: "Moving a sprint card to Done counts as an active day.",
     },
+    {
+      key: "practice",
+      label: "Practice",
+      desc: "Completing a Practice challenge counts as an active day.",
+    },
   ];
 
   return (

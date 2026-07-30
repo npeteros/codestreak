@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import type { CourseDoc, StreakEntryDoc } from "@/lib/firebase/types";
+import type { CourseDoc, StreakEntryDoc, ChallengeDoc } from "@/lib/firebase/types";
 import { requireRole } from "@/lib/auth/session";
 import { initials } from "@/lib/format";
 import { getUser, getUsers } from "@/lib/repositories/users";
@@ -25,7 +25,11 @@ import {
   generateChallengeDrafts,
   type AiChallengeDraft,
 } from "@/lib/services/openai/challengeGeneration";
-import { notifyChallengeCreated, notifyStudentNudged } from "@/lib/actions/notifications";
+import {
+  notifyChallengeCreated,
+  notifyPracticeChallengeCreated,
+  notifyStudentNudged,
+} from "@/lib/actions/notifications";
 
 
 const AT_RISK_DAYS = 1;
@@ -115,7 +119,7 @@ export type CourseSettings = {
   languageTag: string;
   timezone: string;
   inviteCode: string;
-  streakRules: { challenge: boolean; checkin: boolean; sprintCard: boolean };
+  streakRules: { challenge: boolean; checkin: boolean; sprintCard: boolean; practice: boolean };
   isArchived: boolean;
   isPublic: boolean;
 };
@@ -276,7 +280,8 @@ export async function getClassOverview(courseId: string): Promise<
       todayEntry &&
       (todayEntry.sources.challenge ||
         todayEntry.sources.checkin ||
-        todayEntry.sources.sprintCard)
+        todayEntry.sources.sprintCard ||
+        todayEntry.sources.practice)
     )
       activeToday++;
 
@@ -637,6 +642,7 @@ export async function updateStreakRules(
     challenge: boolean;
     checkin: boolean;
     sprintCard: boolean;
+    practice: boolean;
   }
 ): Promise<{ success: boolean; error?: string }> {
   const uid = await verifyInstructor();
@@ -778,7 +784,8 @@ export async function getLatestDraftChallenge(
       difficulty: data.difficulty,
       topicTag: data.topicTag,
       starterCode: data.starterCode,
-      scheduledFor: data.scheduledFor.toDate().toISOString().slice(0, 10),
+      // Non-null: challengesRepo.getLatestDraftChallenge is filtered to kind:"DAILY".
+      scheduledFor: data.scheduledFor!.toDate().toISOString().slice(0, 10),
     },
   };
 }
@@ -826,7 +833,8 @@ export async function getTodayInstructorChallenge(
       difficulty: data.difficulty,
       topicTag: data.topicTag,
       starterCode: data.starterCode,
-      scheduledFor: data.scheduledFor.toDate().toISOString().slice(0, 10),
+      // Non-null: getScheduledChallenge is filtered to kind:"DAILY".
+      scheduledFor: data.scheduledFor!.toDate().toISOString().slice(0, 10),
       isDraft: data.isDraft,
     },
   };
@@ -918,4 +926,206 @@ export async function generateAiChallenges(
   } catch {
     return { success: false, error: "generation_failed" };
   }
+}
+
+// ── Practice challenges (Challenges module) ─────────────────────────────────
+// Same courses/{courseId}/challenges collection, distinguished by kind:
+// "PRACTICE" — see docs/ARCHITECTURE.md / AGENTS.md for why this shares the
+// collection with the Daily Challenge instead of getting its own. The
+// instructor-facing Practice management page shows BOTH instructor-authored
+// practice challenges AND archived (past) Daily Challenges — students see
+// the same merged list, so instructors get full edit/delete parity over
+// everything that shows up there, not just what was authored on this page.
+
+export type PracticeChallengeRow = {
+  id: string;
+  title: string;
+  description: string;
+  difficulty: "EASY" | "MEDIUM" | "HARD";
+  topicTag: string;
+  starterCode: string;
+  isDraft: boolean;
+  origin: "PRACTICE" | "DAILY_ARCHIVE";
+};
+
+// A challenge can be managed from the Practice page if it's a practice
+// challenge (any draft state), or an archived (past-scheduled, published)
+// daily challenge — never today's/a future day's still-exclusive Daily
+// Challenge. Mirrors lib/actions/practiceChallenges.ts's isBrowsable, but
+// instructors may also manage drafts, which students never see.
+function isManageablePractice(data: ChallengeDoc, cutoff: Date): boolean {
+  if (data.kind === "PRACTICE") return true;
+  return !data.isDraft && data.scheduledFor !== undefined && data.scheduledFor.toDate() < cutoff;
+}
+
+export async function createPracticeChallenge(
+  courseId: string,
+  data: {
+    title: string;
+    description: string;
+    difficulty: "EASY" | "MEDIUM" | "HARD";
+    topicTag: string;
+    starterCode: string;
+    isDraft: boolean;
+  }
+): Promise<{ success: boolean; id?: string; error?: string }> {
+  const uid = await verifyInstructor();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  const course = await getCourse(uid, courseId);
+  if (!course) return { success: false, error: "no_course" };
+
+  if (!data.title.trim()) return { success: false, error: "missing_title" };
+
+  const id = await challengesRepo.createPracticeChallenge(course.id, {
+    title: data.title,
+    description: data.description,
+    difficulty: data.difficulty,
+    topicTag: data.topicTag,
+    starterCode: data.starterCode,
+    isDraft: data.isDraft,
+    isAiGenerated: false,
+  });
+
+  if (!data.isDraft) {
+    after(() =>
+      notifyPracticeChallengeCreated(course.id, id).catch((err) =>
+        console.error("[notifications] notifyPracticeChallengeCreated failed:", err)
+      )
+    );
+  }
+
+  return { success: true, id };
+}
+
+export async function updatePracticeChallenge(
+  courseId: string,
+  challengeId: string,
+  data: {
+    title: string;
+    description: string;
+    difficulty: "EASY" | "MEDIUM" | "HARD";
+    topicTag: string;
+    starterCode: string;
+    isDraft: boolean;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  const uid = await verifyInstructor();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  const course = await getCourse(uid, courseId);
+  if (!course) return { success: false, error: "no_course" };
+
+  if (!data.title.trim()) return { success: false, error: "missing_title" };
+
+  const existing = await challengesRepo.getChallenge(course.id, challengeId);
+  const cutoff = getStartOfDayUTC(course.data.timezone);
+  if (!existing || !isManageablePractice(existing, cutoff)) {
+    return { success: false, error: "not_found" };
+  }
+
+  await challengesRepo.updatePracticeChallenge(course.id, challengeId, {
+    title: data.title,
+    description: data.description,
+    difficulty: data.difficulty,
+    topicTag: data.topicTag,
+    starterCode: data.starterCode,
+    isDraft: data.isDraft,
+  });
+
+  if (existing.isDraft && !data.isDraft) {
+    after(() =>
+      notifyPracticeChallengeCreated(course.id, challengeId).catch((err) =>
+        console.error("[notifications] notifyPracticeChallengeCreated failed:", err)
+      )
+    );
+  }
+
+  return { success: true };
+}
+
+export async function deletePracticeChallenge(
+  courseId: string,
+  challengeId: string
+): Promise<{ success: boolean; error?: string }> {
+  const uid = await verifyInstructor();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  const course = await getCourse(uid, courseId);
+  if (!course) return { success: false, error: "no_course" };
+
+  // Guard: only practice challenges or archived (past) daily challenges can
+  // be deleted here — never today's/a future day's still-exclusive Daily
+  // Challenge.
+  const existing = await challengesRepo.getChallenge(course.id, challengeId);
+  const cutoff = getStartOfDayUTC(course.data.timezone);
+  if (!existing || !isManageablePractice(existing, cutoff)) {
+    return { success: false, error: "not_found" };
+  }
+
+  await challengesRepo.deleteChallenge(course.id, challengeId);
+
+  return { success: true };
+}
+
+export async function getPracticeChallengeForInstructor(
+  courseId: string,
+  challengeId: string
+): Promise<
+  { success: true; challenge: PracticeChallengeRow | null } | { success: false; error: string }
+> {
+  const uid = await verifyInstructor();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  const course = await getCourse(uid, courseId);
+  if (!course) return { success: false, error: "no_course" };
+
+  const data = await challengesRepo.getChallenge(course.id, challengeId);
+  const cutoff = getStartOfDayUTC(course.data.timezone);
+  if (!data || !isManageablePractice(data, cutoff)) {
+    return { success: true, challenge: null };
+  }
+
+  return {
+    success: true,
+    challenge: {
+      id: challengeId,
+      title: data.title,
+      description: data.description,
+      difficulty: data.difficulty,
+      topicTag: data.topicTag,
+      starterCode: data.starterCode,
+      isDraft: data.isDraft,
+      origin: data.kind === "PRACTICE" ? "PRACTICE" : "DAILY_ARCHIVE",
+    },
+  };
+}
+
+export async function listPracticeChallengesForInstructor(
+  courseId: string
+): Promise<
+  { success: true; challenges: PracticeChallengeRow[] } | { success: false; error: string }
+> {
+  const uid = await verifyInstructor();
+  if (!uid) return { success: false, error: "unauthenticated" };
+
+  const course = await getCourse(uid, courseId);
+  if (!course) return { success: false, error: "no_course" };
+
+  const cutoff = getStartOfDayUTC(course.data.timezone);
+  const rows = await challengesRepo.listManageablePracticeChallenges(course.id, cutoff);
+
+  return {
+    success: true,
+    challenges: rows.map(({ id, data, origin }) => ({
+      id,
+      title: data.title,
+      description: data.description,
+      difficulty: data.difficulty,
+      topicTag: data.topicTag,
+      starterCode: data.starterCode,
+      isDraft: data.isDraft,
+      origin,
+    })),
+  };
 }

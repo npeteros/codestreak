@@ -74,7 +74,7 @@ export async function recordStreakActivity({
 }: {
   studentId: string;
   courseId: string;
-  source: "challenge" | "checkin" | "sprintCard";
+  source: "challenge" | "checkin" | "sprintCard" | "practice";
 }): Promise<{ success: true; date: string } | { success: false; error: string }> {
   // 1. Verify session — uid must match studentId
   const uid = await getUid();
@@ -124,6 +124,7 @@ export async function getStreakEntries({
       challenge: data.sources.challenge ?? false,
       checkin: data.sources.checkin ?? false,
       sprintCard: data.sources.sprintCard ?? false,
+      practice: data.sources.practice ?? false,
     },
   }));
 

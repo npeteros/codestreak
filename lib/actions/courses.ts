@@ -17,7 +17,7 @@ export async function createCourse(data: {
   description: string;
   languageTag: string;
   timezone: string;
-  streakRules: { challenge: boolean; checkin: boolean; sprintCard: boolean };
+  streakRules: { challenge: boolean; checkin: boolean; sprintCard: boolean; practice: boolean };
 }): Promise<{ success: boolean; courseId?: string; error?: string }> {
   const uid = await getVerifiedInstructor();
   if (!uid) return { success: false, error: "unauthenticated" };

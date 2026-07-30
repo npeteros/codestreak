@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { LayoutGrid, Zap, CircleCheck, BarChart3, BookOpen, Compass } from "lucide-react";
+import { LayoutGrid, Zap, CircleCheck, BarChart3, BookOpen, Compass, Library } from "lucide-react";
 import { MobileMoreSheet } from "@/components/ui/MobileMoreSheet";
 import { LogoutButton } from "@/components/auth/LogoutButton";
 
@@ -18,6 +18,7 @@ const navItems: NavItem[] = [
   { path: "/dashboard/student", label: "Overview", icon: LayoutGrid, exact: true },
   { path: "/courses", label: "Browse Courses", icon: Compass, exact: true },
   { path: "/dashboard/student/challenge", label: "Daily Challenge", icon: Zap },
+  { path: "/dashboard/student/practice", label: "Practice", icon: Library },
   { path: "/dashboard/student/checkin", label: "Check-in", icon: CircleCheck },
   { path: "/dashboard/student/sprint", label: "Sprint Board", icon: BarChart3 },
   { path: "/dashboard/student/journal", label: "AI Journal", icon: BookOpen },

@@ -17,6 +17,7 @@ function e(date: string, sources: Partial<StreakEntry["sources"]> = {}): StreakE
       challenge: sources.challenge ?? false,
       checkin: sources.checkin ?? false,
       sprintCard: sources.sprintCard ?? false,
+      practice: sources.practice ?? false,
     },
   };
 }
@@ -28,6 +29,7 @@ function e(date: string, sources: Partial<StreakEntry["sources"]> = {}): StreakE
 describe("lib/streak/calculate.ts (unmounted — feeds StreakSummary/ActivityHeatmap)", () => {
   it("is streakRules-blind: any single source makes a day active", () => {
     expect(isActiveDay(e(TODAY, { sprintCard: true }))).toBe(true);
+    expect(isActiveDay(e(TODAY, { practice: true }))).toBe(true);
     expect(isActiveDay(e(TODAY))).toBe(false);
   });
 

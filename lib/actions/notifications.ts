@@ -8,6 +8,7 @@ import { getChallenge } from "@/lib/repositories/challenges";
 import { getProject, getTask } from "@/lib/repositories/projects";
 import { sendEmail } from "@/lib/services/email/send";
 import { ChallengeCreatedEmail } from "@/emails/ChallengeCreatedEmail";
+import { PracticeChallengeCreatedEmail } from "@/emails/PracticeChallengeCreatedEmail";
 import { ProjectCreatedEmail } from "@/emails/ProjectCreatedEmail";
 import { TaskCreatedEmail } from "@/emails/TaskCreatedEmail";
 import { NudgeEmail } from "@/emails/NudgeEmail";
@@ -53,6 +54,34 @@ export async function notifyChallengeCreated(
   await notifyStudents(studentIds, (studentName) => ({
     subject: `New challenge in ${course.name}: ${challenge.title}`,
     react: ChallengeCreatedEmail({
+      studentName,
+      courseName: course.name,
+      challengeTitle: challenge.title,
+      difficulty: challenge.difficulty,
+      topicTag: challenge.topicTag,
+      ctaUrl,
+    }),
+  }));
+}
+
+// Sibling to notifyChallengeCreated, but for the Practice module — separate
+// copy/CTA since this isn't "today's challenge is live".
+export async function notifyPracticeChallengeCreated(
+  courseId: string,
+  challengeId: string
+): Promise<void> {
+  const course = await getCourse(courseId);
+  if (!course || course.isArchived) return;
+
+  const challenge = await getChallenge(courseId, challengeId);
+  if (!challenge) return;
+
+  const studentIds = await listEnrolledStudentIds(courseId);
+  const ctaUrl = `${APP_URL}/dashboard/student/practice?courseId=${courseId}`;
+
+  await notifyStudents(studentIds, (studentName) => ({
+    subject: `New challenge in ${course.name}: ${challenge.title}`,
+    react: PracticeChallengeCreatedEmail({
       studentName,
       courseName: course.name,
       challengeTitle: challenge.title,

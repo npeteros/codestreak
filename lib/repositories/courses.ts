@@ -67,7 +67,7 @@ export async function createCourse(data: {
   timezone: string;
   inviteCode: string;
   instructorId: string;
-  streakRules: { challenge: boolean; checkin: boolean; sprintCard: boolean };
+  streakRules: { challenge: boolean; checkin: boolean; sprintCard: boolean; practice: boolean };
 }): Promise<string> {
   const ref = await adminDb.collection("courses").add({
     name: data.name,

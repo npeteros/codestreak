@@ -48,7 +48,7 @@ export async function upsertStreakEntrySource(
   studentId: string,
   courseId: string,
   date: string,
-  source: "challenge" | "checkin" | "sprintCard"
+  source: "challenge" | "checkin" | "sprintCard" | "practice"
 ): Promise<void> {
   const entryRef = streakEntriesCol(studentId, courseId).doc(date);
   const snap = await entryRef.get();
@@ -60,6 +60,7 @@ export async function upsertStreakEntrySource(
       challenge: false,
       checkin: false,
       sprintCard: false,
+      practice: false,
     };
     sources[source] = true;
     await entryRef.set({ date, courseId, sources });

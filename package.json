@@ -9,6 +9,8 @@
     "lint": "eslint",
     "seed": "tsx --env-file=.env scripts/seed.ts",
     "unseed": "tsx --env-file=.env scripts/unseed.ts",
+    "backfill:challenge-kind": "tsx --env-file=.env scripts/backfillChallengeKind.ts",
+    "backfill:streak-rules-practice": "tsx --env-file=.env scripts/backfillStreakRulesPractice.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "email:dev": "email dev --dir emails"
