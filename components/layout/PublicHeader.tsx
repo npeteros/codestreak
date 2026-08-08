@@ -12,11 +12,11 @@ interface Props {
 }
 
 // Shared sticky header for every public (anonymous-reachable) page: the
-// marketing landing page and everything under app/(public)/courses/**.
+// course catalog homepage ("/") and everything under app/(public)/courses/**.
 export function PublicHeader({ user }: Props) {
   const [modalOpen, setModalOpen] = useState(false);
   const pathname = usePathname();
-  const onCourses = pathname?.startsWith("/courses") ?? false;
+  const onCourses = pathname === "/" || (pathname?.startsWith("/courses") ?? false);
   const dashboardHref = user?.role === "INSTRUCTOR" ? "/dashboard/instructor" : "/dashboard/student";
 
   return (
@@ -30,7 +30,7 @@ export function PublicHeader({ user }: Props) {
         </Link>
         <nav className="hidden md:flex items-center gap-6 flex-1 justify-center">
           <Link
-            href="/courses"
+            href="/"
             className={
               onCourses
                 ? "text-sm text-text-primary font-semibold no-underline"

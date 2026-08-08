@@ -141,11 +141,13 @@ export interface LandingPageData {
   stats: { courseCount: number; studentCount: number };
 }
 
-// Powers the marketing landing page (/). Deliberately unauthenticated, same
-// rationale as listPublicCourses above. studentCount is a sum of per-course
-// enrollment counts, not a distinct-student count — a student enrolled in
-// two public courses is counted twice, an acceptable approximation for a
-// marketing stat.
+// Powered the marketing landing page that used to render at "/" (now the
+// course catalog — see app/page.tsx). Currently unused: kept for the
+// archived component at app/_components/archived/LandingClient.tsx in case
+// that page comes back. Deliberately unauthenticated, same rationale as
+// listPublicCourses above. studentCount is a sum of per-course enrollment
+// counts, not a distinct-student count — a student enrolled in two public
+// courses is counted twice, an acceptable approximation for a marketing stat.
 export async function getLandingPageData(): Promise<{
   success: true;
   data: LandingPageData;

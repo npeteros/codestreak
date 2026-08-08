@@ -71,7 +71,7 @@ export default async function PublicCoursePage({
   return (
     <div className="flex flex-col gap-9">
       <div className="font-mono text-xs text-text-faint">
-        <Link href="/courses" className="hover:text-text-secondary">
+        <Link href="/" className="hover:text-text-secondary">
           Courses
         </Link>
         <span className="mx-1.5">/</span>

@@ -47,16 +47,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   return [
     {
+      // Homepage is now the course catalog (see app/page.tsx), so it takes
+      // the "daily" cadence the old /courses catalog route used to have.
       url: `${APP_URL}/`,
       lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 1.0,
-    },
-    {
-      url: `${APP_URL}/courses`,
-      lastModified: new Date(),
       changeFrequency: "daily",
-      priority: 0.9,
+      priority: 1.0,
     },
     {
       url: `${APP_URL}/login`,

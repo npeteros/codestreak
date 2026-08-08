@@ -3,9 +3,11 @@ import { PublicHeader } from "@/components/layout/PublicHeader";
 import { SiteFooter } from "@/components/layout/SiteFooter";
 
 // Deliberately no auth guard — this route group backs the crawlable,
-// anonymous-reachable public catalog under /courses/**. getCurrentUser()
-// returns null immediately for anonymous visitors (cookie absent, no
-// Firestore read), so this stays cheap for crawler/guest traffic.
+// anonymous-reachable course detail/challenge/practice pages under
+// /courses/[courseId]/**. (The catalog index itself now lives at "/" —
+// see app/page.tsx.) getCurrentUser() returns null immediately for
+// anonymous visitors (cookie absent, no Firestore read), so this stays
+// cheap for crawler/guest traffic.
 export default async function PublicLayout({
   children,
 }: {

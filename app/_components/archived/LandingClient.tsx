@@ -1,5 +1,12 @@
 "use client";
 
+// ARCHIVED — no longer wired to any route. This was the marketing landing
+// page previously rendered at "/" before that route became the course
+// catalog (see app/page.tsx). Kept here, unreferenced, in case the
+// marketing-style homepage is wanted again later. Not covered by routing
+// tests; verify imports (e.g. LandingPageData, getLandingPageData) still
+// resolve before reconnecting it.
+
 import { useState } from "react";
 import Link from "next/link";
 import { Zap, CheckCircle2, ListChecks, BookOpen, Users } from "lucide-react";
