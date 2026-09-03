@@ -2,8 +2,6 @@
 
 import { useTransition } from "react";
 import { LogOut, Loader2 } from "lucide-react";
-import { signOut } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
 import { logOut } from "@/lib/actions/auth";
 
 type Props = {
@@ -15,11 +13,6 @@ export function LogoutButton({ showLabel = false }: Props) {
 
   function handleLogout() {
     startTransition(async () => {
-      try {
-        await signOut(auth);
-      } catch {
-        // Client auth clear is best-effort; server session is source of truth
-      }
       await logOut();
     });
   }

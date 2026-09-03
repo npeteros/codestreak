@@ -16,7 +16,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { path: "/dashboard/student", label: "Overview", icon: LayoutGrid, exact: true },
-  { path: "/courses", label: "Browse Courses", icon: Compass, exact: true },
+  { path: "/", label: "Browse Courses", icon: Compass, exact: true },
   { path: "/dashboard/student/challenge", label: "Daily Challenge", icon: Zap },
   { path: "/dashboard/student/practice", label: "Practice", icon: Library },
   { path: "/dashboard/student/checkin", label: "Check-in", icon: CircleCheck },

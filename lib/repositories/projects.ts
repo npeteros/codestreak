@@ -1,34 +1,51 @@
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import type { ProjectDoc, ProjectScope, SprintTaskDoc, SprintTaskStatus, UserRole } from "@/lib/firebase/types";
+import { sequelize } from "@/lib/db/sequelize";
+import { Project, ProjectStudentAccess, SprintTask } from "@/lib/db/models";
+import type {
+  ProjectDoc,
+  ProjectScope,
+  SprintTaskDoc,
+  SprintTaskStatus,
+  UserRole,
+} from "@/lib/types";
 
-function projectsCol(courseId: string) {
-  return adminDb.collection("courses").doc(courseId).collection("projects");
-}
-
-function tasksCol(courseId: string, projectId: string, studentId: string) {
-  return projectsCol(courseId)
-    .doc(projectId)
-    .collection("studentBoards")
-    .doc(studentId)
-    .collection("tasks");
+async function toProjectDoc(row: Project): Promise<ProjectDoc> {
+  const studentIds =
+    row.scope === "STUDENTS"
+      ? (
+          await ProjectStudentAccess.findAll({
+            where: { projectId: row.id },
+            attributes: ["studentId"],
+          })
+        ).map((r) => r.studentId)
+      : undefined;
+  return {
+    courseId: row.courseId,
+    name: row.name,
+    description: row.description ?? "",
+    scope: row.scope,
+    studentIds,
+    isArchived: row.isArchived,
+    createdBy: row.createdBy,
+    createdAt: row.createdAt,
+  };
 }
 
 export async function getProject(
   courseId: string,
   projectId: string
 ): Promise<ProjectDoc | null> {
-  const snap = await projectsCol(courseId).doc(projectId).get();
-  return snap.exists ? (snap.data() as ProjectDoc) : null;
+  const row = await Project.findOne({ where: { id: projectId, courseId } });
+  return row ? toProjectDoc(row) : null;
 }
 
 export async function listProjects(
   courseId: string
 ): Promise<Array<{ id: string; data: ProjectDoc }>> {
-  const snap = await projectsCol(courseId).get();
-  return snap.docs.map((d) => ({ id: d.id, data: d.data() as ProjectDoc }));
+  const rows = await Project.findAll({ where: { courseId } });
+  return Promise.all(rows.map(async (row) => ({ id: row.id, data: await toProjectDoc(row) })));
 }
 
+// Fully replaces student-access rows rather than diffing, in one transaction.
 export async function createProject(
   courseId: string,
   data: {
@@ -39,17 +56,25 @@ export async function createProject(
     createdBy: string;
   }
 ): Promise<string> {
-  const ref = await projectsCol(courseId).add({
-    courseId,
-    name: data.name,
-    description: data.description ?? "",
-    scope: data.scope,
-    studentIds: data.scope === "STUDENTS" ? data.studentIds : [],
-    isArchived: false,
-    createdBy: data.createdBy,
-    createdAt: FieldValue.serverTimestamp(),
+  return sequelize.transaction(async (t) => {
+    const row = await Project.create(
+      {
+        courseId,
+        name: data.name,
+        description: data.description ?? "",
+        scope: data.scope,
+        createdBy: data.createdBy,
+      },
+      { transaction: t }
+    );
+    if (data.scope === "STUDENTS" && data.studentIds?.length) {
+      await ProjectStudentAccess.bulkCreate(
+        data.studentIds.map((studentId) => ({ projectId: row.id, studentId })),
+        { transaction: t }
+      );
+    }
+    return row.id;
   });
-  return ref.id;
 }
 
 export async function updateProject(
@@ -62,11 +87,18 @@ export async function updateProject(
     studentIds?: string[];
   }
 ): Promise<void> {
-  await projectsCol(courseId).doc(projectId).update({
-    name: data.name,
-    description: data.description ?? "",
-    scope: data.scope,
-    studentIds: data.scope === "STUDENTS" ? data.studentIds : [],
+  await sequelize.transaction(async (t) => {
+    await Project.update(
+      { name: data.name, description: data.description ?? "", scope: data.scope },
+      { where: { id: projectId, courseId }, transaction: t }
+    );
+    await ProjectStudentAccess.destroy({ where: { projectId }, transaction: t });
+    if (data.scope === "STUDENTS" && data.studentIds?.length) {
+      await ProjectStudentAccess.bulkCreate(
+        data.studentIds.map((studentId) => ({ projectId, studentId })),
+        { transaction: t }
+      );
+    }
   });
 }
 
@@ -75,7 +107,21 @@ export async function setProjectArchived(
   projectId: string,
   isArchived: boolean
 ): Promise<void> {
-  await projectsCol(courseId).doc(projectId).update({ isArchived });
+  await Project.update({ isArchived }, { where: { id: projectId, courseId } });
+}
+
+function toTaskDoc(row: SprintTask): SprintTaskDoc {
+  return {
+    title: row.title,
+    description: row.description,
+    dueDate: row.dueDate,
+    status: row.status,
+    order: Number(row.order), // DECIMAL comes back as a string
+    createdBy: row.createdBy,
+    createdByRole: row.createdByRole,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
 }
 
 export async function listAllTasks(
@@ -83,8 +129,8 @@ export async function listAllTasks(
   projectId: string,
   studentId: string
 ): Promise<Array<{ id: string; data: SprintTaskDoc }>> {
-  const snap = await tasksCol(courseId, projectId, studentId).get();
-  return snap.docs.map((d) => ({ id: d.id, data: d.data() as SprintTaskDoc }));
+  const rows = await SprintTask.findAll({ where: { projectId, studentId } });
+  return rows.map((row) => ({ id: row.id, data: toTaskDoc(row) }));
 }
 
 export async function getTask(
@@ -93,8 +139,8 @@ export async function getTask(
   studentId: string,
   taskId: string
 ): Promise<SprintTaskDoc | null> {
-  const snap = await tasksCol(courseId, projectId, studentId).doc(taskId).get();
-  return snap.exists ? (snap.data() as SprintTaskDoc) : null;
+  const row = await SprintTask.findOne({ where: { id: taskId, projectId, studentId } });
+  return row ? toTaskDoc(row) : null;
 }
 
 export async function createTask(
@@ -110,19 +156,18 @@ export async function createTask(
     createdByRole: UserRole;
   }
 ): Promise<string> {
-  const now = FieldValue.serverTimestamp();
-  const ref = await tasksCol(courseId, projectId, studentId).add({
+  const row = await SprintTask.create({
+    projectId,
+    studentId,
     title: data.title,
     description: data.description,
-    dueDate: data.dueDate ? Timestamp.fromDate(data.dueDate) : null,
-    status: "TODO" as SprintTaskStatus,
-    order: data.order,
+    dueDate: data.dueDate,
+    status: "TODO",
+    order: String(data.order),
     createdBy: data.createdBy,
     createdByRole: data.createdByRole,
-    createdAt: now,
-    updatedAt: now,
   });
-  return ref.id;
+  return row.id;
 }
 
 export async function updateTask(
@@ -132,9 +177,7 @@ export async function updateTask(
   taskId: string,
   update: Record<string, unknown>
 ): Promise<void> {
-  await tasksCol(courseId, projectId, studentId)
-    .doc(taskId)
-    .update({ ...update, updatedAt: FieldValue.serverTimestamp() });
+  await SprintTask.update(update, { where: { id: taskId, projectId, studentId } });
 }
 
 export async function deleteTask(
@@ -143,7 +186,7 @@ export async function deleteTask(
   studentId: string,
   taskId: string
 ): Promise<void> {
-  await tasksCol(courseId, projectId, studentId).doc(taskId).delete();
+  await SprintTask.destroy({ where: { id: taskId, projectId, studentId } });
 }
 
 export async function moveTask(
@@ -154,9 +197,8 @@ export async function moveTask(
   status: SprintTaskStatus,
   order: number
 ): Promise<void> {
-  await tasksCol(courseId, projectId, studentId).doc(taskId).update({
-    status,
-    order,
-    updatedAt: FieldValue.serverTimestamp(),
-  });
+  await SprintTask.update(
+    { status, order: String(order) },
+    { where: { id: taskId, projectId, studentId } }
+  );
 }

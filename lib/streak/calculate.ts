@@ -4,7 +4,7 @@
 // canonical logic in lib/domain/streak.ts rather than reimplementing it, in
 // case these components get wired up later.
 
-import type { StreakEntryDoc } from "@/lib/firebase/types";
+import type { StreakEntryDoc } from "@/lib/types";
 import {
   ALL_SOURCES_RULE,
   isActiveDay as domainIsActiveDay,

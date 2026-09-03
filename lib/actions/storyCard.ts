@@ -2,7 +2,7 @@
 
 import { getUid } from "@/lib/auth/session";
 import { getUser } from "@/lib/repositories/users";
-import { getFirstEnrolledCourse } from "@/lib/repositories/studentHub";
+import { getFirstEnrolledCourse } from "@/lib/repositories/enrollments";
 import { countSubmissionsFull } from "@/lib/repositories/submissions";
 import { generateQrCodeSvg } from "@/lib/services/qrcode";
 import { getStreakData } from "./streak";

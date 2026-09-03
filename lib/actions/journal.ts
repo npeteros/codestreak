@@ -28,7 +28,7 @@ export async function getJournalEntries(courseId: string) {
   const entries = rows.map(({ id, data: d }) => ({
     id,
     content: d.content,
-    createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
+    createdAt: d.createdAt.toISOString(),
     triggerType: d.triggerType,
   }));
 

@@ -1,7 +1,34 @@
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { getJoinPageData } from "@/lib/actions/courses";
 import { JoinClient } from "./JoinClient";
 import { Logomark } from "@/components/brand/Logomark";
+import { generateMetadata as buildMetadata } from "@/lib/seo/metadata";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ inviteCode: string }>;
+}): Promise<Metadata> {
+  const { inviteCode } = await params;
+  const data = await getJoinPageData(inviteCode);
+
+  if (!data.success) {
+    return buildMetadata({
+      title: "Invite not found — CodeStreak",
+      description: "This invite link is invalid or has expired.",
+      path: `/join/${inviteCode}`,
+      ogImage: null, // opengraph-image.tsx sibling supplies the og:image tags
+    });
+  }
+
+  return buildMetadata({
+    title: `Join ${data.course.name} — CodeStreak`,
+    description: `You've been invited to join ${data.course.name} on CodeStreak.`,
+    path: `/join/${inviteCode}`,
+    ogImage: null, // opengraph-image.tsx sibling supplies the og:image tags
+  });
+}
 
 export default async function JoinPage({
   params,

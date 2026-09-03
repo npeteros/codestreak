@@ -134,7 +134,7 @@ export async function notifyTaskCreated(
   if (!project || !task) return;
 
   const ctaUrl = `${APP_URL}/dashboard/student/sprint?courseId=${courseId}`;
-  const dueDate = task.dueDate ? task.dueDate.toDate().toISOString().slice(0, 10) : null;
+  const dueDate = task.dueDate ? task.dueDate.toISOString().slice(0, 10) : null;
 
   await notifyStudents([studentId], (studentName) => ({
     subject: `New task in ${project.name}: ${task.title}`,

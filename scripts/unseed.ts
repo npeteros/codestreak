@@ -1,61 +1,32 @@
 /**
  * Unseed script — removes everything scripts/seed.ts creates.
  *
- * Mirrors lib/repositories/courses.ts::deleteCourseCascade: recursively
- * deletes each enrolled student's hub doc (students/{uid}/courses/{courseId},
- * which cascades streakEntries, checkIns, challengeSubmissions, sprintCards,
- * journalEntries) before recursively deleting the course itself (which
- * cascades enrollments, challenges, milestones, and projects — including
- * each project's nested studentBoards/{studentId}/tasks).
- *
- * Ensure .env contains valid FIREBASE_ADMIN_* credentials.
+ * Deleting the two seed users cascades through everything scoped to them.
  *
  * Usage:
  *   npm run unseed
  */
 
-import { initializeApp, cert } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { User } from "../lib/db/models";
 
-const COURSE_ID = "cs201-data-structures";
-
-const app = initializeApp({
-  credential: cert({
-    projectId: process.env.FIREBASE_ADMIN_PROJECT_ID,
-    clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
-    privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-  }),
-});
-
-const db = getFirestore(app);
+const INSTRUCTOR_UID = process.env.SEED_INSTRUCTOR_UID ?? "00000000-0000-4000-8000-000000000001";
+const STUDENT_UID = process.env.SEED_STUDENT_UID ?? "00000000-0000-4000-8000-000000000002";
 
 async function unseed() {
-  const courseRef = db.collection("courses").doc(COURSE_ID);
+  const removed = await User.destroy({ where: { id: [INSTRUCTOR_UID, STUDENT_UID] } });
 
-  const courseSnap = await courseRef.get();
-  if (!courseSnap.exists) {
-    console.log(`Nothing to remove — course ${COURSE_ID} does not exist.`);
+  if (removed === 0) {
+    console.log("Nothing to remove — seed users do not exist.");
     return;
   }
 
-  const enrollmentsSnap = await courseRef.collection("enrollments").get();
-
-  await Promise.all(
-    enrollmentsSnap.docs.map((doc) =>
-      db.recursiveDelete(
-        db.collection("students").doc(doc.id).collection("courses").doc(COURSE_ID)
-      )
-    )
-  );
-
-  await db.recursiveDelete(courseRef);
-
   console.log("✓ Unseed complete.");
-  console.log(`  Removed course:              ${COURSE_ID}`);
-  console.log(`  Removed hub docs for:        ${enrollmentsSnap.size} enrolled student(s)`);
+  console.log(`  Removed ${removed} seed user(s) and everything cascaded from them.`);
 }
 
-unseed().catch((err) => {
-  console.error("Unseed failed:", err);
-  process.exit(1);
-});
+unseed()
+  .then(() => process.exit(0))
+  .catch((err) => {
+    console.error("Unseed failed:", err);
+    process.exit(1);
+  });

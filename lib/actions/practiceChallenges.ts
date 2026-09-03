@@ -1,6 +1,6 @@
 "use server";
 
-import type { ChallengeDoc, ChallengeDifficulty } from "@/lib/firebase/types";
+import type { ChallengeDifficulty, ChallengeDoc } from "@/lib/types";
 import { recordStreakActivity } from "./streak";
 import { getUid } from "@/lib/auth/session";
 import { getCourse } from "@/lib/repositories/courses";
@@ -12,6 +12,7 @@ import {
 } from "@/lib/repositories/challenges";
 import { createAttempt } from "@/lib/repositories/challengeAttempts";
 import { getStartOfDayUTC } from "@/lib/domain/time";
+import { isChallengeBrowsable } from "@/lib/domain/visibility";
 import {
   mergePracticePage,
   INITIAL_PRACTICE_CURSOR,
@@ -21,19 +22,6 @@ import {
 } from "@/lib/domain/practiceMerge";
 
 const PAGE_SIZE = 20;
-
-// A challenge is part of the browsable Challenges module if it's a published
-// practice challenge, or a published daily challenge scheduled before the
-// cutoff (i.e. it's not today's/a future day's exclusive Daily Challenge).
-// Re-derived server-side wherever a challengeId reaches an action, rather
-// than trusted from the caller — practice challenges and archived daily
-// challenges share the same collection/IDs as the still-exclusive Daily
-// Challenge, so a challengeId alone doesn't prove browsability.
-function isBrowsable(data: ChallengeDoc, cutoff: Date): boolean {
-  if (data.isDraft) return false;
-  if (data.kind === "PRACTICE") return true;
-  return data.scheduledFor !== undefined && data.scheduledFor.toDate() < cutoff;
-}
 
 export interface PracticeChallengeSummary {
   id: string;
@@ -56,7 +44,7 @@ function toBranchItems(
 ): BranchItem<MergeRow>[] {
   return rows.map(({ id, data }) => ({
     id,
-    sortValue: (field === "createdAt" ? data.createdAt : data.scheduledFor!).toDate().toISOString(),
+    sortValue: (field === "createdAt" ? data.createdAt : data.scheduledFor!).toISOString(),
     data: { doc: data, origin },
   }));
 }
@@ -132,7 +120,7 @@ export async function listPracticeChallengesPage(
     difficulty: data.doc.difficulty,
     topicTag: data.doc.topicTag,
     origin: data.origin,
-    createdAt: data.doc.createdAt.toDate().toISOString(),
+    createdAt: data.doc.createdAt.toISOString(),
   }));
 
   const hasMore = !merged.nextCursor.practiceDone || !merged.nextCursor.dailyDone;
@@ -164,7 +152,7 @@ export async function getPracticeChallenge(
   const data = await getChallenge(courseId, challengeId);
   const cutoff = getStartOfDayUTC(course.timezone);
 
-  if (!data || !isBrowsable(data, cutoff)) {
+  if (!data || !isChallengeBrowsable(data, cutoff)) {
     return { success: true, challenge: null };
   }
 
@@ -194,7 +182,7 @@ export async function submitPracticeAttempt(
 
   const data = await getChallenge(courseId, challengeId);
   const cutoff = getStartOfDayUTC(course.timezone);
-  if (!data || !isBrowsable(data, cutoff)) {
+  if (!data || !isChallengeBrowsable(data, cutoff)) {
     return { success: false, error: "challenge_not_found" };
   }
 

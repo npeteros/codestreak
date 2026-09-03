@@ -9,7 +9,7 @@ import {
   moveSprintTask,
 } from "@/lib/actions/projects";
 import type { SprintTask } from "@/lib/actions/projects";
-import type { SprintTaskStatus } from "@/lib/firebase/types";
+import type { SprintTaskStatus } from "@/lib/types";
 
 const Markdown = dynamic(() => import("@/components/ui/Markdown"));
 

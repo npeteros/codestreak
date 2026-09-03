@@ -13,7 +13,7 @@
 // scenario this pins down, and the refactor plan for why it isn't "fixed"
 // here.
 
-import type { StreakEntryDoc, StreakRules } from "@/lib/firebase/types";
+import type { StreakEntryDoc, StreakRules } from "@/lib/types";
 
 export const ALL_SOURCES_RULE: StreakRules = {
   challenge: true,

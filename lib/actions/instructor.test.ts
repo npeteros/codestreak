@@ -6,7 +6,7 @@ import {
   buildStudentHeatmap,
   buildClassHeatmap,
 } from "./instructor.calc";
-import type { StreakEntryDoc } from "@/lib/firebase/types";
+import type { StreakEntryDoc } from "@/lib/types";
 
 const TODAY = "2026-07-15";
 

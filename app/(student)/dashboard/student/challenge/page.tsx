@@ -1,5 +1,5 @@
 import { requireUidOrRedirect } from "@/lib/auth/session";
-import { listEnrolledCourses } from "@/lib/repositories/studentHub";
+import { listEnrolledCourses } from "@/lib/repositories/enrollments";
 import { getTodayChallenge } from "@/lib/actions/challenges";
 import { ChallengeClient } from "./ChallengeClient";
 

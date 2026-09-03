@@ -1,7 +1,7 @@
 "use client";
 
 import { GraduationCap, BookOpen } from "lucide-react";
-import type { UserRole } from "@/lib/firebase/types";
+import type { UserRole } from "@/lib/types";
 
 interface RoleToggleProps {
   value: UserRole;

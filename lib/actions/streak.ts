@@ -1,11 +1,11 @@
 "use server";
 
-import type { StreakEntryDoc } from "@/lib/firebase/types";
+import type { StreakEntryDoc } from "@/lib/types";
 import type { StreakEntry as CalcEntry } from "@/lib/streak/calculate";
 import { computeStreakData } from "./streak.calc";
 import { getUid } from "@/lib/auth/session";
 import { getCourse } from "@/lib/repositories/courses";
-import { getFirstEnrolledCourse } from "@/lib/repositories/studentHub";
+import { getFirstEnrolledCourse } from "@/lib/repositories/enrollments";
 import { listStreakEntriesAsc, listStreakEntriesDesc, upsertStreakEntrySource } from "@/lib/repositories/streakEntries";
 
 // ── Existing types (used by StreakHeader / StreakHeaderLoader) ────────────────

@@ -1,5 +1,5 @@
 import { requireUidOrRedirect } from "@/lib/auth/session";
-import { listEnrolledCourses } from "@/lib/repositories/studentHub";
+import { listEnrolledCourses } from "@/lib/repositories/enrollments";
 import { listPracticeChallengesPage } from "@/lib/actions/practiceChallenges";
 import { INITIAL_PRACTICE_CURSOR } from "@/lib/domain/practiceMerge";
 import { ChallengesListClient } from "./ChallengesListClient";

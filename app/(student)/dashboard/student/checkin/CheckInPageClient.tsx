@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarCheck, CheckCircle2, ClipboardList, Loader2 } from "lucide-react";
 import { CheckInCard } from "@/components/student/CheckInCard";
 import { createCheckIn } from "@/lib/actions/checkins";
-import type { CheckIn } from "@/lib/firebase/types";
+import type { CheckIn } from "@/lib/types";
 
 const MAX_CHARS = 500;
 const GOLD_THRESHOLD = 100; // chars remaining

@@ -48,7 +48,7 @@ export function StudentCourseSwitcher({ courses }: Props) {
           params.set("courseId", next.id);
           router.push(`${pathname}?${params.toString()}`);
         } else {
-          router.push("/courses");
+          router.push("/");
         }
       }
       router.refresh();

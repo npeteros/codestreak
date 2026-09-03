@@ -1,11 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { UniqueConstraintError } from "sequelize";
 import { getCurrentUser, requireRole } from "@/lib/auth/session";
 import { generateInviteCode } from "@/lib/domain/inviteCode";
 import * as coursesRepo from "@/lib/repositories/courses";
 import * as enrollmentsRepo from "@/lib/repositories/enrollments";
-import * as studentHubRepo from "@/lib/repositories/studentHub";
 
 async function getVerifiedInstructor(): Promise<string | null> {
   const user = await requireRole("INSTRUCTOR");
@@ -24,24 +24,25 @@ export async function createCourse(data: {
 
   if (!data.name.trim()) return { success: false, error: "missing_name" };
 
-  let inviteCode = generateInviteCode();
-  // Ensure uniqueness (collision is extremely rare but guard anyway)
-  for (let i = 0; i < 5; i++) {
-    if (!(await coursesRepo.isInviteCodeTaken(inviteCode))) break;
-    inviteCode = generateInviteCode();
+  // invite_code is UNIQUE — retry with a fresh code on collision.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    try {
+      const courseId = await coursesRepo.createCourse({
+        name: data.name.trim(),
+        description: data.description.trim(),
+        languageTag: data.languageTag,
+        timezone: data.timezone,
+        inviteCode: generateInviteCode(),
+        instructorId: uid,
+        streakRules: data.streakRules,
+      });
+      return { success: true, courseId };
+    } catch (err) {
+      if (!(err instanceof UniqueConstraintError)) throw err;
+    }
   }
 
-  const courseId = await coursesRepo.createCourse({
-    name: data.name.trim(),
-    description: data.description.trim(),
-    languageTag: data.languageTag,
-    timezone: data.timezone,
-    inviteCode,
-    instructorId: uid,
-    streakRules: data.streakRules,
-  });
-
-  return { success: true, courseId };
+  return { success: false, error: "invite_code_collision" };
 }
 
 export async function getCourseByInviteCode(inviteCode: string) {
@@ -106,66 +107,15 @@ export async function joinCourse(
 
   const found = await coursesRepo.getCourseByInviteCode(inviteCode.toUpperCase());
   if (!found) return { success: false, error: "not_found" };
-  const { id: courseId, data: courseData } = found;
+  const { id: courseId } = found;
 
   const alreadyEnrolled = await enrollmentsRepo.isEnrolled(courseId, uid);
 
   if (!alreadyEnrolled) {
-    await Promise.all([
-      enrollStudent(courseId, uid),
-      // Write student hub doc so the dashboard can list enrolled courses
-      studentHubRepo.createHubDoc(uid, courseId, {
-        courseName: courseData.name,
-        timezone: courseData.timezone,
-      }),
-    ]);
+    await enrollStudent(courseId, uid);
   }
 
   return { success: true };
-}
-
-export async function getPublicCourses(): Promise<
-  | {
-      success: true;
-      courses: Array<{
-        id: string;
-        name: string;
-        description: string;
-        languageTag: string;
-        enrolledCount: number;
-      }>;
-    }
-  | { success: false; error: string }
-> {
-  const uid = await getVerifiedStudent();
-  if (!uid) return { success: false, error: "unauthenticated" };
-
-  const [publicCourses, hub] = await Promise.all([
-    coursesRepo.listPublicActiveCourses(),
-    studentHubRepo.listEnrolledCourses(uid),
-  ]);
-
-  const joinedIds = new Set(hub.map((h) => h.id));
-
-  const filtered = publicCourses
-    .filter((c) => !joinedIds.has(c.id))
-    .sort((a, b) => {
-      const at = a.data.createdAt?.toMillis() ?? 0;
-      const bt = b.data.createdAt?.toMillis() ?? 0;
-      return bt - at;
-    });
-
-  const courses = await Promise.all(
-    filtered.map(async ({ id, data }) => ({
-      id,
-      name: data.name,
-      description: data.description,
-      languageTag: data.languageTag,
-      enrolledCount: await enrollmentsRepo.countEnrollments(id),
-    }))
-  );
-
-  return { success: true, courses };
 }
 
 export async function joinPublicCourse(
@@ -182,13 +132,7 @@ export async function joinPublicCourse(
   const alreadyEnrolled = await enrollmentsRepo.isEnrolled(courseId, uid);
 
   if (!alreadyEnrolled) {
-    await Promise.all([
-      enrollStudent(courseId, uid),
-      studentHubRepo.createHubDoc(uid, courseId, {
-        courseName: data.name,
-        timezone: data.timezone,
-      }),
-    ]);
+    await enrollStudent(courseId, uid);
   }
 
   revalidatePath("/courses");
@@ -201,10 +145,7 @@ export async function leaveCourse(
   const uid = await getVerifiedStudent();
   if (!uid) return { success: false, error: "unauthenticated" };
 
-  await Promise.all([
-    enrollmentsRepo.unenrollStudent(courseId, uid),
-    studentHubRepo.deleteHubDocCascade(uid, courseId),
-  ]);
+  await enrollmentsRepo.unenrollStudent(courseId, uid);
 
   revalidatePath("/courses");
   return { success: true };

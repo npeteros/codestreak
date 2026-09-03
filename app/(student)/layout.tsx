@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { requireUidOrRedirect } from "@/lib/auth/session";
-import { listEnrolledCourses } from "@/lib/repositories/studentHub";
+import { listEnrolledCourses } from "@/lib/repositories/enrollments";
 import { StudentNav } from "./_components/StudentNav";
 import { StudentCourseSwitcher, type EnrolledCourse } from "./_components/StudentCourseSwitcher";
 import { LogoutButton } from "@/components/auth/LogoutButton";

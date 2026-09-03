@@ -6,7 +6,7 @@ import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Zap, CircleCheck, BarChart3, BookOpen } from "lucide-react";
 import { getOverviewSummary, type OverviewSummary } from "@/lib/actions/overview";
-import type { ChallengeDifficulty, JournalTriggerType } from "@/lib/firebase/types";
+import type { ChallengeDifficulty, JournalTriggerType } from "@/lib/types";
 
 const Markdown = dynamic(() => import("@/components/ui/Markdown"));
 
