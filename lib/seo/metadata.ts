@@ -1,10 +1,6 @@
 import type { Metadata } from "next";
 
-if (!process.env.NEXT_PUBLIC_APP_URL) {
-  throw new Error("NEXT_PUBLIC_APP_URL is not set in .env.local");
-}
-
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://codestreak.dcism.org").replace(/\/$/, "");
 
 export function generateMetadata({
   title,

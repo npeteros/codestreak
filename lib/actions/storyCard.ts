@@ -8,7 +8,7 @@ import { generateQrCodeSvg } from "@/lib/services/qrcode";
 import { getStreakData } from "./streak";
 
 const HEATMAP_DAYS = 90;
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://codestreak-app.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://codestreak.dcism.org";
 
 export interface StoryCardData {
   streak: number;

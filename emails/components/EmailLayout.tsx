@@ -27,7 +27,7 @@ const colors = {
 };
 
 // Same app-icon asset used for the PWA manifest/favicons (public/app-icon-192.png).
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://codestreak-app.vercel.app").replace(/\/$/, "");
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://codestreak.dcism.org").replace(/\/$/, "");
 const LOGO_URL = `${APP_URL}/app-icon-192.png`;
 
 export function EmailLayout({
