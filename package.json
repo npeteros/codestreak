@@ -9,6 +9,7 @@
     "lint": "eslint",
     "seed": "tsx --env-file=.env scripts/seed.ts",
     "unseed": "tsx --env-file=.env scripts/unseed.ts",
+    "db:sync": "bun run scripts/db/sync.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "email:dev": "email dev --dir emails",
