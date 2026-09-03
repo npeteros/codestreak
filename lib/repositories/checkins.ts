@@ -1,14 +1,9 @@
-import { FieldValue, Timestamp } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import type { CheckInDoc } from "@/lib/firebase/types";
+import { Op } from "sequelize";
+import { CheckIn } from "@/lib/db/models";
+import type { CheckInDoc } from "@/lib/types";
 
-function checkInsCol(studentId: string, courseId: string) {
-  return adminDb
-    .collection("students")
-    .doc(studentId)
-    .collection("courses")
-    .doc(courseId)
-    .collection("checkIns");
+function toDoc(row: CheckIn): CheckInDoc {
+  return { note: row.note, courseId: row.courseId, createdAt: row.createdAt };
 }
 
 export async function hasCheckedInInRange(
@@ -17,12 +12,10 @@ export async function hasCheckedInInRange(
   startOfDay: Date,
   endOfDay: Date
 ): Promise<boolean> {
-  const snap = await checkInsCol(studentId, courseId)
-    .where("createdAt", ">=", Timestamp.fromDate(startOfDay))
-    .where("createdAt", "<", Timestamp.fromDate(endOfDay))
-    .limit(1)
-    .get();
-  return !snap.empty;
+  const row = await CheckIn.findOne({
+    where: { studentId, courseId, createdAt: { [Op.gte]: startOfDay, [Op.lt]: endOfDay } },
+  });
+  return row !== null;
 }
 
 export async function createCheckIn(
@@ -30,12 +23,8 @@ export async function createCheckIn(
   courseId: string,
   note: string
 ): Promise<string> {
-  const ref = await checkInsCol(studentId, courseId).add({
-    note,
-    courseId,
-    createdAt: FieldValue.serverTimestamp(),
-  });
-  return ref.id;
+  const row = await CheckIn.create({ studentId, courseId, note });
+  return row.id;
 }
 
 export async function countCheckInsSince(
@@ -43,11 +32,7 @@ export async function countCheckInsSince(
   courseId: string,
   since: Date
 ): Promise<number> {
-  const snap = await checkInsCol(studentId, courseId)
-    .where("createdAt", ">=", Timestamp.fromDate(since))
-    .count()
-    .get();
-  return snap.data().count;
+  return CheckIn.count({ where: { studentId, courseId, createdAt: { [Op.gte]: since } } });
 }
 
 export async function listRecentCheckIns(
@@ -55,16 +40,16 @@ export async function listRecentCheckIns(
   courseId: string,
   limit: number
 ): Promise<Array<{ id: string; data: CheckInDoc }>> {
-  const snap = await checkInsCol(studentId, courseId)
-    .orderBy("createdAt", "desc")
-    .limit(limit)
-    .get();
-  return snap.docs.map((d) => ({ id: d.id, data: d.data() as CheckInDoc }));
+  const rows = await CheckIn.findAll({
+    where: { studentId, courseId },
+    order: [["createdAt", "DESC"]],
+    limit,
+  });
+  return rows.map((row) => ({ id: row.id, data: toDoc(row) }));
 }
 
 export async function countCheckIns(studentId: string, courseId: string): Promise<number> {
-  const snap = await checkInsCol(studentId, courseId).count().get();
-  return snap.data().count;
+  return CheckIn.count({ where: { studentId, courseId } });
 }
 
 export async function listCheckInsPage(
@@ -73,8 +58,17 @@ export async function listCheckInsPage(
   limit: number,
   cursor: Date | null
 ): Promise<Array<{ id: string; data: CheckInDoc }>> {
-  let query = checkInsCol(studentId, courseId).orderBy("createdAt", "desc").limit(limit);
-  if (cursor) query = query.startAfter(Timestamp.fromDate(cursor));
-  const snap = await query.get();
-  return snap.docs.map((d) => ({ id: d.id, data: d.data() as CheckInDoc }));
+  const rows = await CheckIn.findAll({
+    where: {
+      studentId,
+      courseId,
+      ...(cursor ? { createdAt: { [Op.lt]: cursor } } : {}),
+    },
+    order: [
+      ["createdAt", "DESC"],
+      ["id", "DESC"],
+    ],
+    limit,
+  });
+  return rows.map((row) => ({ id: row.id, data: toDoc(row) }));
 }

@@ -1,11 +1,12 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { randomUUID } from "crypto";
+import argon2 from "argon2";
 import { redirect } from "next/navigation";
-import { adminAuth } from "@/lib/firebase/admin";
-import type { UserRole } from "@/lib/firebase/types";
-import { SESSION_COOKIE_NAME as COOKIE_NAME } from "@/lib/auth/session";
-import { createUser } from "@/lib/repositories/users";
+import { cookies } from "next/headers";
+import type { UserRole } from "@/lib/types";
+import { SESSION_COOKIE_NAME as COOKIE_NAME, issueSessionCookie } from "@/lib/auth/session";
+import { createUser, getUserByEmail } from "@/lib/repositories/users";
 
 export async function signUp(
   email: string,
@@ -14,42 +15,36 @@ export async function signUp(
   role: UserRole
 ) {
   try {
-    const userRecord = await adminAuth.createUser({
-      email,
-      password,
-      displayName: name,
-    });
+    const passwordHash = await argon2.hash(password, { type: argon2.argon2id });
+    const uid = randomUUID();
 
-    await adminAuth.setCustomUserClaims(userRecord.uid, { role });
+    await createUser(uid, { email, name, role, passwordHash });
+    await issueSessionCookie(uid, role);
 
-    await createUser(userRecord.uid, { email, name, role });
-
-    const customToken = await adminAuth.createCustomToken(userRecord.uid, {
-      role,
-    });
-
-    return { success: true as const, customToken, role };
+    return { success: true as const, role };
   } catch (err: unknown) {
-    const code = (err as { code?: string }).code ?? "";
-    const messages: Record<string, string> = {
-      "auth/email-already-in-use": "An account with this email already exists.",
-      "auth/email-already-exists": "An account with this email already exists.",
-      "auth/weak-password": "Password must be at least 8 characters.",
-      "auth/invalid-email": "Please enter a valid email address.",
-    };
+    const code = (err as { parent?: { code?: string } }).parent?.code ?? "";
+    if (code === "ER_DUP_ENTRY") {
+      return { success: false as const, error: "An account with this email already exists." };
+    }
     console.error("Error during sign up:", err);
-    return {
-      success: false as const,
-      error: messages[code] ?? "Something went wrong. Please try again.",
-    };
+    return { success: false as const, error: "Something went wrong. Please try again." };
   }
 }
 
 export async function logIn(email: string, password: string) {
-  // Login is handled entirely client-side via Firebase client SDK.
-  void email;
-  void password;
-  return { success: false as const, error: "not implemented" };
+  const user = await getUserByEmail(email);
+  if (!user) {
+    return { success: false as const, error: "Invalid email or password." };
+  }
+
+  const valid = await argon2.verify(user.passwordHash, password);
+  if (!valid) {
+    return { success: false as const, error: "Invalid email or password." };
+  }
+
+  await issueSessionCookie(user.uid, user.role);
+  return { success: true as const, role: user.role };
 }
 
 export async function logOut() {

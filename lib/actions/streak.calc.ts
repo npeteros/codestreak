@@ -6,7 +6,7 @@
 // Delegates to the canonical lib/domain/streak.ts, which respects
 // streakRules exactly as this file's original inline implementation did.
 
-import type { StreakEntryDoc, StreakRules } from "@/lib/firebase/types";
+import type { StreakEntryDoc, StreakRules } from "@/lib/types";
 import type { StreakData } from "./streak";
 import {
   getCurrentStreak,

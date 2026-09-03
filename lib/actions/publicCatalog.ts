@@ -8,11 +8,10 @@
 // Any mutation (join, submit) still goes through the existing authenticated
 // actions in lib/actions/courses.ts / lib/actions/practiceChallenges.ts.
 
-import type { ChallengeDifficulty, ChallengeDoc, UserDoc } from "@/lib/firebase/types";
+import type { ChallengeDifficulty, ChallengeDoc, UserDoc } from "@/lib/types";
 import { getCurrentUser } from "@/lib/auth/session";
 import * as coursesRepo from "@/lib/repositories/courses";
 import * as enrollmentsRepo from "@/lib/repositories/enrollments";
-import * as studentHubRepo from "@/lib/repositories/studentHub";
 import * as usersRepo from "@/lib/repositories/users";
 import * as streakEntriesRepo from "@/lib/repositories/streakEntries";
 import { calcStreak } from "@/lib/actions/instructor.calc";
@@ -83,12 +82,12 @@ export async function listPublicCourses(): Promise<{
   const user = await getCurrentUser();
   const joinedIds =
     user && user.role === "STUDENT"
-      ? new Set((await studentHubRepo.listEnrolledCourses(user.uid)).map((h) => h.id))
+      ? new Set((await enrollmentsRepo.listEnrolledCourses(user.uid)).map((h) => h.id))
       : new Set<string>();
 
   const sorted = publicCourses.sort((a, b) => {
-    const at = a.data.createdAt?.toMillis() ?? 0;
-    const bt = b.data.createdAt?.toMillis() ?? 0;
+    const at = a.data.createdAt.getTime();
+    const bt = b.data.createdAt.getTime();
     return bt - at;
   });
 
@@ -155,8 +154,8 @@ export async function getLandingPageData(): Promise<{
   const publicCourses = await coursesRepo.listPublicActiveCourses();
 
   const sorted = [...publicCourses].sort((a, b) => {
-    const at = a.data.createdAt?.toMillis() ?? 0;
-    const bt = b.data.createdAt?.toMillis() ?? 0;
+    const at = a.data.createdAt.getTime();
+    const bt = b.data.createdAt.getTime();
     return bt - at;
   });
 
@@ -305,7 +304,7 @@ export async function getPublicChallengeHistory(
     id,
     title: data.title,
     difficulty: data.difficulty,
-    date: data.scheduledFor!.toDate().toLocaleDateString("en-US", {
+    date: data.scheduledFor!.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
       timeZone: "UTC",
@@ -382,7 +381,7 @@ function toBranchItems(
 ): BranchItem<MergeRow>[] {
   return rows.map(({ id, data }) => ({
     id,
-    sortValue: (field === "createdAt" ? data.createdAt : data.scheduledFor!).toDate().toISOString(),
+    sortValue: (field === "createdAt" ? data.createdAt : data.scheduledFor!).toISOString(),
     data: { doc: data, origin },
   }));
 }
@@ -457,7 +456,7 @@ export async function listPublicPracticeChallengesPage(
     difficulty: data.doc.difficulty,
     topicTag: data.doc.topicTag,
     origin: data.origin,
-    createdAt: data.doc.createdAt.toDate().toISOString(),
+    createdAt: data.doc.createdAt.toISOString(),
   }));
 
   const hasMore = !merged.nextCursor.practiceDone || !merged.nextCursor.dailyDone;

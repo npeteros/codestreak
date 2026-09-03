@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { computeStreakData } from "./streak.calc";
-import type { StreakEntryDoc, StreakRules } from "@/lib/firebase/types";
+import type { StreakEntryDoc, StreakRules } from "@/lib/types";
 
 const TODAY = "2026-07-15";
 const ALL_RULES: StreakRules = { challenge: true, checkin: true, sprintCard: true, practice: true };

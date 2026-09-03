@@ -1,6 +1,6 @@
 import { requireUidOrRedirect } from "@/lib/auth/session";
 import { getUser } from "@/lib/repositories/users";
-import { listEnrolledCourses } from "@/lib/repositories/studentHub";
+import { listEnrolledCourses } from "@/lib/repositories/enrollments";
 import {
   StudentOverviewClient,
   type CourseOption,

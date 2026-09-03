@@ -1,18 +1,20 @@
-import { adminDb } from "@/lib/firebase/admin";
-import type { SprintCardDoc } from "@/lib/firebase/types";
+import { SprintCard } from "@/lib/db/models";
+import type { SprintCardDoc } from "@/lib/types";
 
-// /students/{uid}/courses/{courseId}/sprintCards — legacy Kanban snapshot,
-// read-only from the app (only scripts/seed.ts writes to it).
+// Legacy, read-only from the app — distinct from the live Project/SprintTask boards.
 export async function listSprintCards(
   studentId: string,
   courseId: string
 ): Promise<SprintCardDoc[]> {
-  const snap = await adminDb
-    .collection("students")
-    .doc(studentId)
-    .collection("courses")
-    .doc(courseId)
-    .collection("sprintCards")
-    .get();
-  return snap.docs.map((d) => d.data() as SprintCardDoc);
+  const rows = await SprintCard.findAll({ where: { studentId, courseId } });
+  return rows.map((row) => ({
+    title: row.title,
+    description: row.description,
+    status: row.status,
+    isInstructorSeeded: row.isInstructorSeeded,
+    milestoneId: row.milestoneId ?? undefined,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    movedAt: row.movedAt,
+  }));
 }

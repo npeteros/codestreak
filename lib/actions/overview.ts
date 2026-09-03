@@ -1,7 +1,6 @@
 "use server";
 
-import type { Timestamp } from "firebase-admin/firestore";
-import type { StreakEntryDoc, JournalTriggerType, ChallengeDifficulty } from "@/lib/firebase/types";
+import type { StreakEntryDoc, JournalTriggerType, ChallengeDifficulty } from "@/lib/types";
 import type { StreakData } from "@/lib/actions/streak";
 import { computeOverviewStreakData } from "./overview.calc";
 import { getUid } from "@/lib/auth/session";
@@ -89,11 +88,7 @@ export async function getOverviewSummary(
   let latestCheckIn: OverviewSummary["latestCheckIn"] = null;
   if (recentCheckIns.length > 0) {
     const d = recentCheckIns[0].data;
-    const ts = d.createdAt as Timestamp | null;
-    latestCheckIn = {
-      note: d.note,
-      createdAt: ts ? ts.toDate().toISOString() : new Date().toISOString(),
-    };
+    latestCheckIn = { note: d.note, createdAt: d.createdAt.toISOString() };
   }
 
   // ── Sprint counts ────────────────────────────────────────────────────────────
@@ -112,12 +107,7 @@ export async function getOverviewSummary(
   let latestJournal: OverviewSummary["latestJournal"] = null;
   if (recentJournal.length > 0) {
     const d = recentJournal[0].data;
-    const ts = d.createdAt as Timestamp | null;
-    latestJournal = {
-      content: d.content,
-      triggerType: d.triggerType,
-      createdAt: ts ? ts.toDate().toISOString() : new Date().toISOString(),
-    };
+    latestJournal = { content: d.content, triggerType: d.triggerType, createdAt: d.createdAt.toISOString() };
   }
 
   return {

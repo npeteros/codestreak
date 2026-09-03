@@ -1,7 +1,7 @@
-import type { CheckIn } from "@/lib/firebase/types";
+import type { CheckIn } from "@/lib/types";
 import { requireUidOrRedirect } from "@/lib/auth/session";
 import { getStartOfDayUTC } from "@/lib/domain/time";
-import { listEnrolledCourses } from "@/lib/repositories/studentHub";
+import { listEnrolledCourses } from "@/lib/repositories/enrollments";
 import { hasCheckedInInRange, listRecentCheckIns } from "@/lib/repositories/checkins";
 import { CheckInPageClient } from "./CheckInPageClient";
 import type { CourseOption } from "./CheckInPageClient";
@@ -53,7 +53,7 @@ export default async function StudentCheckinPage({
       id,
       note: data.note,
       courseId: data.courseId ?? selectedCourseId,
-      createdAt: (data.createdAt?.toDate() ?? new Date()).toISOString(),
+      createdAt: data.createdAt.toISOString(),
     } satisfies CheckIn));
   }
 

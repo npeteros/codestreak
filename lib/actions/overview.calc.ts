@@ -8,7 +8,7 @@
 // delegate to lib/domain/streak.ts, this is just a named re-export so
 // lib/actions/overview.ts keeps its own import name.
 
-import type { StreakEntryDoc, StreakRules } from "@/lib/firebase/types";
+import type { StreakEntryDoc, StreakRules } from "@/lib/types";
 import type { StreakData } from "./streak";
 import { computeStreakData } from "./streak.calc";
 

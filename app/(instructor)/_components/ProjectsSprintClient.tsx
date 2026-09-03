@@ -10,7 +10,7 @@ import {
   getSprintTasks,
 } from "@/lib/actions/projects";
 import type { Project, SprintTask } from "@/lib/actions/projects";
-import type { ProjectScope } from "@/lib/firebase/types";
+import type { ProjectScope } from "@/lib/types";
 import { SprintBoardClient } from "@/components/sprint/SprintBoardClient";
 import { SprintBoardSkeleton } from "@/components/sprint/SprintBoardSkeleton";
 import { ProjectDescriptionPanel } from "@/components/sprint/ProjectDescriptionPanel";

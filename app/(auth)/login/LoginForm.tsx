@@ -3,19 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
+import { logIn } from "@/lib/actions/auth";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthInput } from "@/components/auth/AuthInput";
 import { SubmitButton } from "@/components/auth/SubmitButton";
-
-const LOGIN_ERRORS: Record<string, string> = {
-  "auth/user-not-found": "No account found with this email.",
-  "auth/wrong-password": "Incorrect password. Please try again.",
-  "auth/too-many-requests": "Too many attempts. Please try again later.",
-  "auth/invalid-credential": "Invalid email or password.",
-  "auth/invalid-email": "Please enter a valid email address.",
-};
 
 export function LoginForm({ next }: { next?: string } = {}) {
   const router = useRouter();
@@ -30,29 +21,19 @@ export function LoginForm({ next }: { next?: string } = {}) {
     setLoading(true);
 
     try {
-      const { user } = await signInWithEmailAndPassword(auth, email, password);
-      const idToken = await user.getIdToken();
-
-      const res = await fetch("/api/auth/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      });
-
-      if (!res.ok) {
-        setError("Failed to sign in. Please try again.");
+      const result = await logIn(email, password);
+      if (!result.success) {
+        setError(result.error);
         return;
       }
 
-      const { role } = await res.json();
       const destination =
-        role === "INSTRUCTOR"
+        result.role === "INSTRUCTOR"
           ? "/dashboard/instructor"
           : next ?? "/dashboard/student";
       router.push(destination);
-    } catch (err: unknown) {
-      const code = (err as { code?: string }).code ?? "";
-      setError(LOGIN_ERRORS[code] ?? "Something went wrong. Please try again.");
+    } catch {
+      setError("Something went wrong. Please try again.");
     } finally {
       setLoading(false);
     }

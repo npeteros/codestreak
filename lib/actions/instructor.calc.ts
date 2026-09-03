@@ -9,7 +9,7 @@
 // switching to the real course rules. See lib/domain/streak.ts's top
 // comment and lib/actions/streakDivergence.test.ts.
 
-import type { StreakEntryDoc } from "@/lib/firebase/types";
+import type { StreakEntryDoc } from "@/lib/types";
 import {
   ALL_SOURCES_RULE,
   getCurrentStreak,

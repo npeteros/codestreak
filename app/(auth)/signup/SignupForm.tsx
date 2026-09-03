@@ -3,14 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signInWithCustomToken } from "firebase/auth";
-import { auth } from "@/lib/firebase/client";
 import { signUp } from "@/lib/actions/auth";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { AuthInput } from "@/components/auth/AuthInput";
 import { RoleToggle } from "@/components/auth/RoleToggle";
 import { SubmitButton } from "@/components/auth/SubmitButton";
-import type { UserRole } from "@/lib/firebase/types";
+import type { UserRole } from "@/lib/types";
 
 export function SignupForm({ next }: { next?: string } = {}) {
   const router = useRouter();
@@ -41,20 +39,6 @@ export function SignupForm({ next }: { next?: string } = {}) {
 
       if (!result.success) {
         setError(result.error);
-        return;
-      }
-
-      const { user } = await signInWithCustomToken(auth, result.customToken);
-      const idToken = await user.getIdToken(true);
-
-      const res = await fetch("/api/auth/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      });
-
-      if (!res.ok) {
-        setError("Failed to create session. Please try again.");
         return;
       }
 

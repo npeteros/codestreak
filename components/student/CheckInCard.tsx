@@ -1,4 +1,4 @@
-import type { CheckIn } from "@/lib/firebase/types";
+import type { CheckIn } from "@/lib/types";
 
 interface Props {
   checkIn: CheckIn;

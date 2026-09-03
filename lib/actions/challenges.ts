@@ -1,6 +1,6 @@
 "use server";
 
-import type { ChallengeDifficulty } from "@/lib/firebase/types";
+import type { ChallengeDifficulty } from "@/lib/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
 import { triggerJournalEntry } from "@/lib/actions/journal";
 import { getUid } from "@/lib/auth/session";

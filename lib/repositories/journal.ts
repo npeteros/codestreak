@@ -1,14 +1,8 @@
-import { FieldValue } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import type { JournalEntryDoc, JournalTriggerType } from "@/lib/firebase/types";
+import { JournalEntry } from "@/lib/db/models";
+import type { JournalEntryDoc, JournalTriggerType } from "@/lib/types";
 
-function journalCol(studentId: string, courseId: string) {
-  return adminDb
-    .collection("students")
-    .doc(studentId)
-    .collection("courses")
-    .doc(courseId)
-    .collection("journalEntries");
+function toDoc(row: JournalEntry): JournalEntryDoc {
+  return { content: row.content, createdAt: row.createdAt, triggerType: row.triggerType };
 }
 
 export async function createJournalEntry(
@@ -17,11 +11,7 @@ export async function createJournalEntry(
   content: string,
   triggerType: JournalTriggerType
 ): Promise<void> {
-  await journalCol(studentId, courseId).add({
-    content,
-    triggerType,
-    createdAt: FieldValue.serverTimestamp(),
-  });
+  await JournalEntry.create({ studentId, courseId, content, triggerType });
 }
 
 export async function listRecentJournalEntries(
@@ -29,9 +19,10 @@ export async function listRecentJournalEntries(
   courseId: string,
   limit: number
 ): Promise<Array<{ id: string; data: JournalEntryDoc }>> {
-  const snap = await journalCol(studentId, courseId)
-    .orderBy("createdAt", "desc")
-    .limit(limit)
-    .get();
-  return snap.docs.map((d) => ({ id: d.id, data: d.data() as JournalEntryDoc }));
+  const rows = await JournalEntry.findAll({
+    where: { studentId, courseId },
+    order: [["createdAt", "DESC"]],
+    limit,
+  });
+  return rows.map((row) => ({ id: row.id, data: toDoc(row) }));
 }

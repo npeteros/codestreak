@@ -1,13 +1,16 @@
-import { adminDb } from "@/lib/firebase/admin";
-import type { StreakEntryDoc } from "@/lib/firebase/types";
+import { StreakEntry } from "@/lib/db/models";
+import type { StreakEntryDoc } from "@/lib/types";
 
-function streakEntriesCol(studentId: string, courseId: string) {
-  return adminDb
-    .collection("students")
-    .doc(studentId)
-    .collection("courses")
-    .doc(courseId)
-    .collection("streakEntries");
+function toDoc(row: StreakEntry): StreakEntryDoc {
+  return {
+    date: row.date,
+    sources: {
+      challenge: row.challenge,
+      checkin: row.checkin,
+      sprintCard: row.sprintCard,
+      practice: row.practice,
+    },
+  };
 }
 
 export async function listStreakEntriesDesc(
@@ -15,54 +18,51 @@ export async function listStreakEntriesDesc(
   courseId: string,
   limit: number
 ): Promise<Array<{ id: string; data: StreakEntryDoc }>> {
-  const snap = await streakEntriesCol(studentId, courseId)
-    .orderBy("date", "desc")
-    .limit(limit)
-    .get();
-  return snap.docs.map((d) => ({ id: d.id, data: d.data() as StreakEntryDoc }));
+  const rows = await StreakEntry.findAll({
+    where: { studentId, courseId },
+    order: [["date", "DESC"]],
+    limit,
+  });
+  return rows.map((row) => ({ id: row.date, data: toDoc(row) }));
 }
 
-// getLongestStreak needs full history (an all-time-longest streak can
-// predate any realistic window), so this can't take a tight limit like the
-// roster's 365-day cap without changing that result. SAFETY_CAP bounds the
-// pathological/malicious case (a decade+ of daily entries) without
-// affecting any real bootcamp-length account; past the cap, oldest-first
-// ordering means it would start truncating recent days before old ones, so
-// it's a defensive ceiling, not a real windowing strategy.
+// Full history, not a tight window — getLongestStreak needs it. This is a
+// defensive ceiling against pathological history size, not real pagination.
 const SAFETY_CAP_DAYS = 3650;
 
 export async function listStreakEntriesAsc(
   studentId: string,
   courseId: string
 ): Promise<Array<{ id: string; data: StreakEntryDoc }>> {
-  const snap = await streakEntriesCol(studentId, courseId)
-    .orderBy("date", "asc")
-    .limit(SAFETY_CAP_DAYS)
-    .get();
-  return snap.docs.map((d) => ({ id: d.id, data: d.data() as StreakEntryDoc }));
+  const rows = await StreakEntry.findAll({
+    where: { studentId, courseId },
+    order: [["date", "ASC"]],
+    limit: SAFETY_CAP_DAYS,
+  });
+  return rows.map((row) => ({ id: row.date, data: toDoc(row) }));
 }
 
-// Marks `source` active for `date`, merging with any existing entry (other
-// sources for the same day are preserved) or creating a fresh one.
+// Marks `source` active for `date`, preserving other sources already set for
+// that day. Each branch is a single atomic UPSERT — no transaction needed.
 export async function upsertStreakEntrySource(
   studentId: string,
   courseId: string,
   date: string,
   source: "challenge" | "checkin" | "sprintCard" | "practice"
 ): Promise<void> {
-  const entryRef = streakEntriesCol(studentId, courseId).doc(date);
-  const snap = await entryRef.get();
-
-  if (snap.exists) {
-    await entryRef.update({ [`sources.${source}`]: true });
-  } else {
-    const sources: StreakEntryDoc["sources"] = {
-      challenge: false,
-      checkin: false,
-      sprintCard: false,
-      practice: false,
-    };
-    sources[source] = true;
-    await entryRef.set({ date, courseId, sources });
+  const base = { studentId, courseId, date };
+  switch (source) {
+    case "challenge":
+      await StreakEntry.upsert({ ...base, challenge: true });
+      break;
+    case "checkin":
+      await StreakEntry.upsert({ ...base, checkin: true });
+      break;
+    case "sprintCard":
+      await StreakEntry.upsert({ ...base, sprintCard: true });
+      break;
+    case "practice":
+      await StreakEntry.upsert({ ...base, practice: true });
+      break;
   }
 }

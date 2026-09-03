@@ -3,7 +3,7 @@ import { computeStreakData } from "./streak.calc";
 import { computeOverviewStreakData } from "./overview.calc";
 import { calcStreak, heatmapLevel } from "./instructor.calc";
 import { isActiveDay, getCurrentStreak } from "@/lib/streak/calculate";
-import type { StreakEntryDoc, StreakRules } from "@/lib/firebase/types";
+import type { StreakEntryDoc, StreakRules } from "@/lib/types";
 
 const TODAY = "2026-07-15";
 

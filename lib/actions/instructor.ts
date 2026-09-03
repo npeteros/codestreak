@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import type { CourseDoc, StreakEntryDoc, ChallengeDoc } from "@/lib/firebase/types";
+import type { CourseDoc, StreakEntryDoc, ChallengeDoc } from "@/lib/types";
 import { requireRole } from "@/lib/auth/session";
 import { initials } from "@/lib/format";
 import { getUser, getUsers } from "@/lib/repositories/users";
@@ -428,7 +428,7 @@ export async function getStudentDetail(
     id,
     content: d.content,
     triggerType: d.triggerType,
-    createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
+    createdAt: d.createdAt.toISOString(),
   }));
 
   const challengeInfo = new Map(courseChallenges.map(({ id, data }) => [id, data]));
@@ -441,14 +441,14 @@ export async function getStudentDetail(
       challengeTitle: challenge?.title ?? "Deleted challenge",
       difficulty: challenge?.difficulty ?? "MEDIUM",
       code: d.code,
-      submittedAt: (d.submittedAt?.toDate() ?? new Date()).toISOString(),
+      submittedAt: d.submittedAt.toISOString(),
     };
   });
 
   const checkIns = recentCheckIns.map(({ id, data: d }) => ({
     id,
     note: d.note,
-    createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
+    createdAt: d.createdAt.toISOString(),
   }));
 
   return {
@@ -514,7 +514,7 @@ export async function getStudentSubmissionHistory(
       challengeTitle: challenge?.title ?? "Deleted challenge",
       difficulty: challenge?.difficulty ?? "MEDIUM",
       code: d.code,
-      submittedAt: (d.submittedAt?.toDate() ?? new Date()).toISOString(),
+      submittedAt: d.submittedAt.toISOString(),
     };
   });
 
@@ -559,7 +559,7 @@ export async function getStudentCheckInHistory(
   const items = docs.map(({ id, data: d }) => ({
     id,
     note: d.note,
-    createdAt: (d.createdAt?.toDate() ?? new Date()).toISOString(),
+    createdAt: d.createdAt.toISOString(),
   }));
 
   return {
@@ -793,7 +793,7 @@ export async function getLatestDraftChallenge(
       topicTag: data.topicTag,
       starterCode: data.starterCode,
       // Non-null: challengesRepo.getLatestDraftChallenge is filtered to kind:"DAILY".
-      scheduledFor: data.scheduledFor!.toDate().toISOString().slice(0, 10),
+      scheduledFor: data.scheduledFor!.toISOString().slice(0, 10),
     },
   };
 }
@@ -842,7 +842,7 @@ export async function getTodayInstructorChallenge(
       topicTag: data.topicTag,
       starterCode: data.starterCode,
       // Non-null: getScheduledChallenge is filtered to kind:"DAILY".
-      scheduledFor: data.scheduledFor!.toDate().toISOString().slice(0, 10),
+      scheduledFor: data.scheduledFor!.toISOString().slice(0, 10),
       isDraft: data.isDraft,
     },
   };
@@ -964,7 +964,7 @@ export type PracticeChallengeRow = {
 // instructors may also manage drafts, which students never see.
 function isManageablePractice(data: ChallengeDoc, cutoff: Date): boolean {
   if (data.kind === "PRACTICE") return true;
-  return !data.isDraft && data.scheduledFor !== undefined && data.scheduledFor.toDate() < cutoff;
+  return !data.isDraft && data.scheduledFor !== undefined && data.scheduledFor < cutoff;
 }
 
 export async function createPracticeChallenge(
@@ -1106,7 +1106,7 @@ export async function getPracticeChallengeForInstructor(
       starterCode: data.starterCode,
       isDraft: data.isDraft,
       origin: data.kind === "PRACTICE" ? "PRACTICE" : "DAILY_ARCHIVE",
-      createdAt: data.createdAt.toDate().toISOString(),
+      createdAt: data.createdAt.toISOString(),
     },
   };
 }
@@ -1123,7 +1123,7 @@ function toPracticeBranchItems(
 ): BranchItem<PracticeMergeRow>[] {
   return rows.map(({ id, data }) => ({
     id,
-    sortValue: (field === "createdAt" ? data.createdAt : data.scheduledFor!).toDate().toISOString(),
+    sortValue: (field === "createdAt" ? data.createdAt : data.scheduledFor!).toISOString(),
     data: { doc: data, origin },
   }));
 }
@@ -1202,7 +1202,7 @@ export async function listPracticeChallengesForInstructorPage(
     starterCode: data.doc.starterCode,
     isDraft: data.doc.isDraft,
     origin: data.origin,
-    createdAt: data.doc.createdAt.toDate().toISOString(),
+    createdAt: data.doc.createdAt.toISOString(),
   }));
 
   const hasMore = !merged.nextCursor.practiceDone || !merged.nextCursor.dailyDone;

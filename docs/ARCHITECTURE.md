@@ -3,7 +3,7 @@
 CodeStreak's backend is organized into four layers underneath `app/`, each with
 one job. A Server Action should read as a straight line through these layers —
 auth guard, then repository call(s), then domain/service call(s), then a
-response shape — with no raw Firestore access, auth logic, or business-rule
+response shape — with no raw database access, auth logic, or business-rule
 math inlined at the action or page level.
 
 ```
@@ -14,12 +14,17 @@ lib/actions/*.ts          "use server" — orchestration only (see below)
    ┌────┼──────────┬──────────────┐
    |    |          |              |
 lib/auth  lib/repositories  lib/domain  lib/services
-session   Firestore access   pure math   external APIs
-verification (typed, no      (streak/    (OpenAI, email)
-             shaping)         heatmap,
-                              invite codes,
-                              time helpers)
+session   MySQL access via   pure math   external APIs
+verification lib/db/models   (streak/    (OpenAI, email)
+(typed, no    (Sequelize)    heatmap,
+ shaping)                    invite codes,
+                             time helpers)
 ```
+
+The database is MySQL, accessed through Sequelize models in `lib/db/models/`
+(schema/migrations in `lib/db/migrations/`) — this replaced an earlier
+Firestore backend. Auth is likewise hand-rolled (argon2 + `jose`-signed
+session JWTs), replacing an earlier Firebase Auth integration.
 
 ## Layers
 
@@ -27,41 +32,58 @@ verification (typed, no      (streak/    (OpenAI, email)
 
 The single source of truth for "who is making this request." Everything else
 that needs identity or role calls into this module rather than touching
-cookies or `adminAuth` directly.
+cookies, `jose`, or `SESSION_SECRET` directly.
+
+Sessions are self-issued, `jose`-signed JWTs (`{uid, role}`, HS256), not a
+third-party auth provider — `issueSessionCookie()` mints one at sign-up/log-in
+time. Passwords are hashed with `argon2` (argon2id), only ever in
+`lib/actions/auth.ts`'s Node-runtime Server Actions, never in `proxy.ts`.
 
 | Function | Cost | Use when |
 |---|---|---|
-| `getUid()` | cookie verify only | you only need the caller's uid (no role check) |
-| `getCurrentUser()` | cookie verify + `users/{uid}` read | you need role/name/email |
+| `getUid()` | local JWT verify only | you only need the caller's uid (no role check) |
+| `getCurrentUser()` | local JWT verify + `users` table read | you need role/name/email |
 | `requireRole(role)` | same as above | Server Action should return `{success:false}` on failure |
 | `requireUidOrRedirect()` / `requireRoleOrRedirect(role)` | throwing variants | layouts and pages that redirect to `/login` instead of returning an error value |
 
-`proxy.ts` (Next 16's renamed Middleware) is the one exception: it decodes the
-`role` custom claim straight off the verified JWT instead of calling
-`requireRole()`, deliberately, to avoid a Firestore round-trip on every
-navigation. It still shares `verifySessionCookie()` with everything else.
+`proxy.ts` (Next 16's renamed Middleware) is the one exception: it decodes
+`role` straight off the verified JWT payload instead of calling
+`requireRole()`, deliberately, to avoid a database round-trip on every
+navigation. It still shares `verifySessionToken()` with everything else.
 
-**Rule:** no file outside `lib/auth/` should call `adminAuth.verifySessionCookie`
-or read the session cookie directly.
+**Rule:** no file outside `lib/auth/session.ts` should sign, verify, set, or
+read the `codestreak_session` cookie, or read `SESSION_SECRET`.
 
 ### `lib/repositories/*.ts`
 
-One module per Firestore aggregate (`users`, `courses`, `enrollments`,
-`studentHub`, `challenges`, `submissions`, `checkins`, `sprintCards`,
-`journal`, `streakEntries`, `projects`). Each wraps raw path construction and
-returns typed, un-shaped doc data — `{ id, data }` pairs, not a
-caller-specific response. Response shaping (renaming fields, computing
-derived values, picking a subset) stays in the action layer, since the same
-aggregate is often shaped differently by different callers (e.g. a
-submission looks different in `getStudentDetail`'s drawer vs.
+One module per aggregate (`users`, `courses`, `enrollments`, `challenges`,
+`submissions`, `checkins`, `sprintCards`, `journal`, `streakEntries`,
+`projects`) backed by Sequelize models in `lib/db/models/`. Each returns
+typed, un-shaped row data — `{ id, data }` pairs, not a caller-specific
+response. Response shaping (renaming fields, computing derived values,
+picking a subset) stays in the action layer, since the same aggregate is
+often shaped differently by different callers (e.g. a submission looks
+different in `getStudentDetail`'s drawer vs.
 `getStudentSubmissionHistory`'s paginated list).
 
-**Rule:** no file outside `lib/repositories/` should import `adminDb` or
-build a Firestore path. (`app/api/auth/session/route.ts` is the one
-documented exception — it manages the session cookie itself, not app data.)
+There is no `studentHub` repository — a student's enrolled courses are a
+direct join against `Enrollment`+`Course` (`enrollments.ts`'s
+`listEnrolledCourses`/`getFirstEnrolledCourse`) rather than a denormalized
+snapshot, since a relational `JOIN` is exactly what that snapshot existed to
+avoid under Firestore.
 
-These are concrete Firestore modules, not interfaces behind a swappable
-adapter — that trade-off was made deliberately (see "Decisions" below).
+**Rule:** no file outside `lib/repositories/` should import from `lib/db/`
+or construct a Sequelize query directly.
+
+Cascading deletes (`courses.ts::deleteCourseCascade`,
+`enrollments.ts::unenrollStudent`) use real hard `DELETE`s with `ON DELETE
+CASCADE` foreign keys, wrapped in a transaction — a deliberate exception to
+this org's usual soft-delete convention, made explicitly for this app to
+match its pre-existing behavior (nothing here is recoverable after deletion;
+don't add soft-delete flags to these tables without asking first). The
+`users` table is the one exception in the other direction: it has a
+`deleted` flag, since that's what auth's session check uses to invalidate a
+disabled account's session — see `lib/auth/session.ts`.
 
 ### `lib/domain/*.ts`
 
@@ -167,36 +189,44 @@ effect of an unrelated change.
 
 ## Two sprint-task systems (don't confuse them)
 
-- **Legacy per-course `sprintCards`** — `students/{uid}/courses/{courseId}/sprintCards/{cardId}`,
-  a flat `TODO`/`IN_PROGRESS`/`DONE` Kanban snapshot. It's **read-only from
-  the app** (`lib/repositories/sprintCards.ts::listSprintCards`) — only
+- **Legacy per-course `sprint_cards` table** — one row per (student, course,
+  card), a flat `TODO`/`IN_PROGRESS`/`DONE` Kanban snapshot. It's **read-only
+  from the app** (`lib/repositories/sprintCards.ts::listSprintCards`) — only
   `scripts/seed.ts` writes to it. It feeds the sprint-progress counts shown
   on the student overview and instructor roster/drawer.
-- **Per-project `SprintTask` boards** — `courses/{courseId}/projects/{projectId}/studentBoards/{studentId}/tasks/{taskId}`,
-  the live, editable Kanban (`TODO`/`IN_PROGRESS`/`IN_REVIEW`/`DONE`) behind
-  `lib/actions/projects.ts` and `components/sprint/SprintBoardClient.tsx`.
-  Each student has their own board within a shared project; instructors pick
-  a student to view/manage via a board switcher
-  (`app/(instructor)/_components/ProjectsSprintClient.tsx`).
+- **Per-project `sprint_tasks` table** — the live, editable Kanban
+  (`TODO`/`IN_PROGRESS`/`IN_REVIEW`/`DONE`) behind `lib/actions/projects.ts`
+  and `components/sprint/SprintBoardClient.tsx`, scoped by `(projectId,
+  studentId)`. Each student has their own board within a shared project
+  (`projects` table, with a `project_student_access` join table replacing
+  what was a Firestore array field for `scope:"STUDENTS"` projects);
+  instructors pick a student to view/manage via a board switcher
+  (`app/(instructor)/_components/ProjectsSprintClient.tsx`). `order` is a
+  `DECIMAL(20,10)` column (fractional-index drag-reorder) — never change it
+  to a float/double type, repeated insert-between operations will eventually
+  collide on precision.
 
 These are unrelated data models that happen to both be called "sprint" —
 don't assume a change to one applies to the other.
 
 ## Auth flow
 
-1. Client SDK sign-in returns an ID token → posted to
-   `app/api/auth/session/route.ts`, which calls
-   `adminAuth.createSessionCookie()` and sets it `httpOnly`.
-2. `proxy.ts` runs on every `/dashboard/*` request, decodes the JWT's `role`
-   custom claim (no Firestore read) and redirects instructor↔student
-   cross-navigation.
+1. `signUp`/`logIn` (`lib/actions/auth.ts`, real Server Actions — `logIn` is
+   no longer a stub) hash/verify the password with `argon2` and, on success,
+   call `issueSessionCookie(uid, role)` directly. No client-SDK round trip,
+   no separate session-exchange route — the Server Action sets the cookie
+   itself.
+2. `proxy.ts` runs on every `/dashboard/*` request, decodes the session
+   JWT's `role` claim locally via `verifySessionToken()` (no DB read) and
+   redirects instructor↔student cross-navigation.
 3. Layouts/pages call `lib/auth/session.ts`'s throwing variants
    (`requireUidOrRedirect`/`requireRoleOrRedirect`) to redirect to `/login`
    on an invalid/expired cookie.
 4. Server Actions call the non-throwing variants (`getUid`/`getCurrentUser`/
    `requireRole`) and return `{success:false, error:"unauthenticated"}`
    instead of throwing, since a client component calling an action expects a
-   value back, not a redirect.
+   value back, not a redirect. `getCurrentUser()` re-reads the `users` table
+   (excluding soft-deleted accounts) as the authoritative check.
 
 ## Testing strategy
 
@@ -222,15 +252,16 @@ test for response shapes.
 
 ## Decisions already made (don't re-litigate without asking)
 
-- **Repositories are concrete Firestore modules, not an interface behind a
-  swappable adapter.** They still centralize all Firestore access (a future
-  backend swap touches ~10 files instead of the whole app), but callers get
-  Firestore-shaped data back, and Firestore-only features (`recursiveDelete`,
-  `FieldValue.serverTimestamp()`, `count()` aggregates, `Timestamp`-cursor
-  pagination) are used directly rather than abstracted away. A move to a
-  relational store would need real schema redesign regardless (nested
-  subcollections like `streakEntries/{date}` have no direct relational
-  equivalent), so interfaces now wouldn't avoid that work later.
+- **Repositories are concrete Sequelize modules, not an interface behind a
+  swappable adapter.** They centralize all database access (a future backend
+  swap touches ~12 files instead of the whole app), but callers get
+  MySQL-shaped data back rather than something abstracted behind a generic
+  interface. This app was previously on Firestore; that migration is what
+  produced the current schema (see the per-aggregate design notes in each
+  `lib/repositories/*.ts` file for what changed shape in the process —
+  `studentIds` array → `project_student_access` join table,
+  `streakEntries.sources` map → four boolean columns, the eliminated
+  `studentHub` denormalization, etc.).
 - **The streakRules divergence is preserved, not fixed** (see above).
 - **`lib/streak/calculate.ts` + `StreakSummary.tsx`/`ActivityHeatmap.tsx` stay
   unmounted**, migrated onto the shared domain module but not wired into a

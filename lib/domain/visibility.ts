@@ -1,4 +1,4 @@
-import type { ChallengeDoc, CourseDoc } from "@/lib/firebase/types";
+import type { ChallengeDoc, CourseDoc } from "@/lib/types";
 
 // A course is publicly viewable by guests iff it's both opted into public
 // browsing and not archived. Reuses the same isPublic flag instructors
@@ -13,10 +13,10 @@ export function isCoursePublic(course: Pick<CourseDoc, "isPublic" | "isArchived"
 // cutoff (i.e. it's not today's/a future day's exclusive Daily Challenge).
 // Re-derived server-side wherever a challengeId reaches an action, rather
 // than trusted from the caller — practice challenges and archived daily
-// challenges share the same collection/IDs as the still-exclusive Daily
+// challenges share the same table/IDs as the still-exclusive Daily
 // Challenge, so a challengeId alone doesn't prove browsability.
 export function isChallengeBrowsable(data: ChallengeDoc, cutoff: Date): boolean {
   if (data.isDraft) return false;
   if (data.kind === "PRACTICE") return true;
-  return data.scheduledFor !== undefined && data.scheduledFor.toDate() < cutoff;
+  return data.scheduledFor !== undefined && data.scheduledFor < cutoff;
 }

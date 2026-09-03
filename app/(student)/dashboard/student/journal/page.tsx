@@ -1,7 +1,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { requireUidOrRedirect } from "@/lib/auth/session";
-import { listEnrolledCourses } from "@/lib/repositories/studentHub";
+import { listEnrolledCourses } from "@/lib/repositories/enrollments";
 import { getJournalEntries } from "@/lib/actions/journal";
 
 const TRIGGER_SOURCE: Record<string, string> = {

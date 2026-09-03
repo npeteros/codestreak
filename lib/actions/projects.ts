@@ -1,7 +1,7 @@
 "use server";
 
 import { after } from "next/server";
-import type { ProjectDoc, ProjectScope, SprintTaskDoc, SprintTaskStatus, UserRole } from "@/lib/firebase/types";
+import type { ProjectDoc, ProjectScope, SprintTaskDoc, SprintTaskStatus, UserRole } from "@/lib/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
 import { triggerJournalEntry } from "@/lib/actions/journal";
 import { notifyProjectCreated, notifyTaskCreated } from "@/lib/actions/notifications";
@@ -85,7 +85,7 @@ function serializeTask(id: string, d: SprintTaskDoc): SprintTask {
     id,
     title: d.title,
     description: d.description,
-    dueDate: d.dueDate ? d.dueDate.toDate().toISOString().slice(0, 10) : null,
+    dueDate: d.dueDate ? d.dueDate.toISOString().slice(0, 10) : null,
     status: d.status,
     order: d.order,
     createdBy: d.createdBy,

@@ -1,6 +1,6 @@
 "use server";
 
-import type { ChallengeDifficulty, ChallengeDoc } from "@/lib/firebase/types";
+import type { ChallengeDifficulty, ChallengeDoc } from "@/lib/types";
 import { recordStreakActivity } from "./streak";
 import { getUid } from "@/lib/auth/session";
 import { getCourse } from "@/lib/repositories/courses";
@@ -44,7 +44,7 @@ function toBranchItems(
 ): BranchItem<MergeRow>[] {
   return rows.map(({ id, data }) => ({
     id,
-    sortValue: (field === "createdAt" ? data.createdAt : data.scheduledFor!).toDate().toISOString(),
+    sortValue: (field === "createdAt" ? data.createdAt : data.scheduledFor!).toISOString(),
     data: { doc: data, origin },
   }));
 }
@@ -120,7 +120,7 @@ export async function listPracticeChallengesPage(
     difficulty: data.doc.difficulty,
     topicTag: data.doc.topicTag,
     origin: data.origin,
-    createdAt: data.doc.createdAt.toDate().toISOString(),
+    createdAt: data.doc.createdAt.toISOString(),
   }));
 
   const hasMore = !merged.nextCursor.practiceDone || !merged.nextCursor.dailyDone;

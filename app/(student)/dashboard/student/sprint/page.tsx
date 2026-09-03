@@ -1,5 +1,5 @@
 import { requireUidOrRedirect } from "@/lib/auth/session";
-import { listEnrolledCourses } from "@/lib/repositories/studentHub";
+import { listEnrolledCourses } from "@/lib/repositories/enrollments";
 import { listProjectsForStudent, getSprintTasks } from "@/lib/actions/projects";
 import type { SprintTask } from "@/lib/actions/projects";
 import { SprintClient } from "./SprintClient";

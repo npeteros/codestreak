@@ -1,38 +1,49 @@
-import { FieldValue } from "firebase-admin/firestore";
-import { adminDb } from "@/lib/firebase/admin";
-import type { UserDoc, UserRole } from "@/lib/firebase/types";
+import { Op } from "sequelize";
+import { User } from "@/lib/db/models";
+import type { UserDoc, UserRole } from "@/lib/types";
 
-export async function getUser(uid: string): Promise<UserDoc | null> {
-  const snap = await adminDb.collection("users").doc(uid).get();
-  return snap.exists ? (snap.data() as UserDoc) : null;
+function toUserDoc(row: User): UserDoc {
+  return {
+    uid: row.id,
+    email: row.email,
+    name: row.name,
+    role: row.role,
+    createdAt: row.createdAt,
+  };
 }
 
-// Batched read across many uids (one round trip via adminDb.getAll instead
-// of N single-doc reads) — for fan-out views like a class roster.
+export async function getUser(uid: string): Promise<UserDoc | null> {
+  const row = await User.findOne({ where: { id: uid, deleted: false } });
+  return row ? toUserDoc(row) : null;
+}
+
+// Batched read across many uids — one round trip instead of N.
 export async function getUsers(uids: string[]): Promise<Map<string, UserDoc>> {
   const result = new Map<string, UserDoc>();
   if (uids.length === 0) return result;
 
-  const refs = uids.map((uid) => adminDb.collection("users").doc(uid));
-  const snaps = await adminDb.getAll(...refs);
-  for (const snap of snaps) {
-    if (snap.exists) result.set(snap.id, snap.data() as UserDoc);
-  }
+  const rows = await User.findAll({ where: { id: { [Op.in]: uids }, deleted: false } });
+  for (const row of rows) result.set(row.id, toUserDoc(row));
   return result;
 }
 
+// Auth-only lookup — includes the password hash.
+export async function getUserByEmail(
+  email: string
+): Promise<(UserDoc & { passwordHash: string }) | null> {
+  const row = await User.findOne({ where: { email: email.toLowerCase(), deleted: false } });
+  return row ? { ...toUserDoc(row), passwordHash: row.passwordHash } : null;
+}
+
 export async function createUser(
-  uid: string,
-  data: { email: string; name: string; role: UserRole }
+  id: string,
+  data: { email: string; name: string; role: UserRole; passwordHash: string }
 ): Promise<void> {
-  await adminDb
-    .collection("users")
-    .doc(uid)
-    .set({
-      uid,
-      email: data.email,
-      name: data.name,
-      role: data.role,
-      createdAt: FieldValue.serverTimestamp(),
-    });
+  await User.create({
+    id,
+    email: data.email.toLowerCase(),
+    name: data.name,
+    role: data.role,
+    passwordHash: data.passwordHash,
+  });
 }

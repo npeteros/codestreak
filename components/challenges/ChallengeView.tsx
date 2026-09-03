@@ -1,5 +1,5 @@
 import dynamic from "next/dynamic";
-import type { ChallengeDifficulty } from "@/lib/firebase/types";
+import type { ChallengeDifficulty } from "@/lib/types";
 
 const Markdown = dynamic(() => import("@/components/ui/Markdown"));
 
