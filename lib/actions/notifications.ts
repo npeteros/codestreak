@@ -13,7 +13,7 @@ import { ProjectCreatedEmail } from "@/emails/ProjectCreatedEmail";
 import { TaskCreatedEmail } from "@/emails/TaskCreatedEmail";
 import { NudgeEmail } from "@/emails/NudgeEmail";
 
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://codestreak-app.vercel.app").replace(/\/$/, "");
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "https://codestreak.dcism.org").replace(/\/$/, "");
 
 // Sends one email per uid, in parallel, without letting one failure block the rest.
 async function notifyStudents(
