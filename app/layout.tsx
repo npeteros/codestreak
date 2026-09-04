@@ -29,7 +29,7 @@ export const metadata: Metadata = {
     template: "%s | CodeStreak",
   },
   description:
-    "Course-based accountability for programming students. Build the habit. Ship the code.",
+    "Course-based accountability for programming students. Building the habit of coding every day.",
   openGraph: {
     siteName: "CodeStreak",
     type: "website",
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
         url: "/og-1200x630.png",
         width: 1200,
         height: 630,
-        alt: "CodeStreak — Build the habit. Ship the code.",
+        alt: "CodeStreak — Building the habit of coding every day.",
       },
     ],
   },

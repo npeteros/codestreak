@@ -31,7 +31,7 @@ export default async function Image({
 
   const heading = data.success ? data.course.name : "Invite not found";
   const tagline = data.success
-    ? "Build the habit. Ship the code."
+    ? "Building the habit of coding every day."
     : "This invite link is invalid or has expired.";
 
   const fontText = `CODESTREAK${heading}${tagline}${

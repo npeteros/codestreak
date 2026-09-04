@@ -31,7 +31,7 @@ export default async function Image({
 
   const heading = course ? course.name : "Course not found";
   const tagline = course
-    ? "Build the habit. Ship the code."
+    ? "Building the habit of coding every day."
     : "This course isn't public or doesn't exist.";
 
   const fontText = `CODESTREAK${heading}${tagline}${course ? course.languageTag : ""}`;

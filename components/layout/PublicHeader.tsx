@@ -28,18 +28,6 @@ export function PublicHeader({ user }: Props) {
             Code<span className="font-mono font-medium">Streak</span>
           </span>
         </Link>
-        <nav className="hidden md:flex items-center gap-6 flex-1 justify-center">
-          <Link
-            href="/"
-            className={
-              onCourses
-                ? "text-sm text-text-primary font-semibold no-underline"
-                : "text-sm text-text-secondary no-underline hover:text-text-primary transition-colors"
-            }
-          >
-            Courses
-          </Link>
-        </nav>
         <div className="flex items-center gap-3.5 flex-none">
           {user ? (
             <Link
@@ -50,18 +38,18 @@ export function PublicHeader({ user }: Props) {
             </Link>
           ) : (
             <>
-              <button
-                onClick={() => setModalOpen(true)}
+              <Link
+                href="/login"
                 className="bg-transparent border-none text-text-secondary text-sm cursor-pointer px-1 py-2 hover:text-text-primary transition-colors"
               >
                 Sign in
-              </button>
-              <button
-                onClick={() => setModalOpen(true)}
+              </Link>
+              <Link
+                href="/signup"
                 className="bg-gold text-bg border-none rounded-[9px] px-[18px] py-[9px] text-sm font-semibold cursor-pointer hover:brightness-110 transition-all"
               >
-                Get started — it&rsquo;s free
-              </button>
+                Get started
+              </Link>
             </>
           )}
         </div>

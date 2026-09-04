@@ -57,9 +57,7 @@ export function LandingClient({
               Built by a student, for students
             </div>
             <h1 className="m-0 font-serif font-normal text-[52px] leading-[1.08] text-text-primary tracking-[-0.01em]">
-              Build the habit.
-              <br />
-              Ship the code.
+              Building the habit of coding every day.
             </h1>
             <p className="m-0 max-w-[460px] text-[16.5px] leading-relaxed text-text-secondary">
               Free courses in the languages you&rsquo;re already taking. Daily

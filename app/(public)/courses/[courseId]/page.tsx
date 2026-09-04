@@ -36,7 +36,9 @@ export async function generateMetadata({
 
   return buildMetadata({
     title: `${course.name} — CodeStreak`,
-    description: course.description || `Join ${course.name} on CodeStreak and build the habit.`,
+    description:
+      course.description ||
+      `Join ${course.name} on CodeStreak and build the habit of coding every day.`,
     path: `/courses/${courseId}`,
     ogImage: null, // opengraph-image.tsx sibling supplies the og:image tags
   });
@@ -53,20 +55,27 @@ export default async function PublicCoursePage({
   params: Promise<{ courseId: string }>;
 }) {
   const { courseId } = await params;
-  const [{ course }, dailyResult, historyResult, leaderboardResult, user] = await Promise.all([
-    getPublicCourse(courseId),
-    getPublicDailyChallenge(courseId),
-    getPublicChallengeHistory(courseId),
-    getPublicLeaderboard(courseId),
-    getCurrentUser(),
-  ]);
+  const [{ course }, dailyResult, historyResult, leaderboardResult, user] =
+    await Promise.all([
+      getPublicCourse(courseId),
+      getPublicDailyChallenge(courseId),
+      getPublicChallengeHistory(courseId),
+      getPublicLeaderboard(courseId),
+      getCurrentUser(),
+    ]);
 
   if (!course) notFound();
 
   const challenge = dailyResult.success ? dailyResult.challenge : null;
   const history = historyResult.success ? historyResult.items : [];
-  const leaderboard = leaderboardResult.success ? leaderboardResult.entries : [];
-  const viewerRole = !user ? "GUEST" : user.role === "INSTRUCTOR" ? "INSTRUCTOR" : "STUDENT";
+  const leaderboard = leaderboardResult.success
+    ? leaderboardResult.entries
+    : [];
+  const viewerRole = !user
+    ? "GUEST"
+    : user.role === "INSTRUCTOR"
+      ? "INSTRUCTOR"
+      : "STUDENT";
 
   return (
     <div className="flex flex-col gap-9">
@@ -97,25 +106,15 @@ export default async function PublicCoursePage({
               <span className="w-7 h-7 rounded-[8px] bg-gold/[0.16] flex items-center justify-center font-mono text-[11px] text-gold flex-none">
                 {course.instructorInitial}
               </span>
-              <span className="text-[13.5px] text-text-secondary">{course.instructorName}</span>
+              <span className="text-[13.5px] text-text-secondary">
+                {course.instructorName}
+              </span>
             </span>
           )}
           <span className="font-mono text-xs text-text-faint">
             {course.enrolledCount} enrolled
           </span>
-          <span className="font-mono text-xs text-text-faint">Free</span>
         </div>
-        {viewerRole !== "INSTRUCTOR" && (
-          <div className="flex items-center gap-3.5 pt-1.5 flex-wrap">
-            <JoinCourseButton courseId={courseId} isGuest={viewerRole === "GUEST"} label="Enroll — it's free" />
-            <a
-              href="#challenge"
-              className="border border-white/[0.14] rounded-[10px] px-[22px] py-3 text-[15px] text-text-secondary no-underline hover:text-text-primary hover:border-white/25 transition-colors"
-            >
-              Preview today&rsquo;s challenge
-            </a>
-          </div>
-        )}
       </section>
 
       {/* BODY */}
@@ -158,8 +157,12 @@ export default async function PublicCoursePage({
                     className="bg-surface border border-white/[0.06] rounded-xl px-4 py-3.5 flex items-center justify-between gap-3.5 flex-wrap"
                   >
                     <div className="flex flex-col gap-1 min-w-0">
-                      <span className="text-sm text-[#E4E2DB] font-medium">{h.title}</span>
-                      <span className="font-mono text-[11px] text-text-faint">{h.date}</span>
+                      <span className="text-sm text-[#E4E2DB] font-medium">
+                        {h.title}
+                      </span>
+                      <span className="font-mono text-[11px] text-text-faint">
+                        {h.date}
+                      </span>
                     </div>
                     <span className="font-mono text-[10.5px] text-text-muted border border-white/10 rounded-full px-2.5 py-0.5 flex-none">
                       {DIFFICULTY_LABEL[h.difficulty]}
@@ -186,7 +189,9 @@ export default async function PublicCoursePage({
                   <span className="text-[14.5px] font-semibold text-[#E4E2DB]">
                     {course.instructorName}
                   </span>
-                  <span className="font-mono text-[10.5px] text-text-muted">Instructor</span>
+                  <span className="font-mono text-[10.5px] text-text-muted">
+                    Instructor
+                  </span>
                 </div>
               </div>
               {course.otherCourse && (
@@ -207,23 +212,17 @@ export default async function PublicCoursePage({
               </span>
               {leaderboard.map((l) => (
                 <div key={l.rank} className="flex items-center gap-2.5">
-                  <span className="font-mono text-xs text-text-faint w-4 flex-none">{l.rank}</span>
+                  <span className="font-mono text-xs text-text-faint w-4 flex-none">
+                    {l.rank}
+                  </span>
                   <span className="text-[13px] text-text-secondary flex-1 min-w-0 truncate">
                     {l.name}
                   </span>
-                  <span className="font-mono text-xs text-gold">{l.streak}d</span>
+                  <span className="font-mono text-xs text-gold">
+                    {l.streak}d
+                  </span>
                 </div>
               ))}
-            </div>
-          )}
-
-          {viewerRole !== "INSTRUCTOR" && (
-            <div className="bg-gradient-to-br from-gold/10 to-surface border border-gold/30 rounded-[16px] p-5 flex flex-col gap-2.5">
-              <span className="text-sm font-semibold text-text-primary">Free to enroll</span>
-              <p className="m-0 text-[12.5px] text-text-secondary leading-relaxed">
-                No cost, no catch. Start today&rsquo;s challenge in under a minute.
-              </p>
-              <JoinCourseButton courseId={courseId} isGuest={viewerRole === "GUEST"} label="Enroll now" />
             </div>
           )}
         </div>
