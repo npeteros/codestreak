@@ -85,7 +85,7 @@ export async function generateHintReply(input: HintChatInput): Promise<string> {
       { role: "user", content: buildContextPreamble(input) },
       ...recentHistory.map((m) => ({ role: m.role, content: m.content })),
     ],
-    max_tokens: 200,
+    max_tokens: 400,
     temperature: 0.7,
   });
 
