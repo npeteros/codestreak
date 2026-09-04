@@ -34,8 +34,8 @@ import {
 
 const PAGE_SIZE = 20;
 
-// Shared by listPublicCourses and getLandingPageData: batch-join a set of
-// courses' instructors in one round trip, plus their display initials.
+// Shared by listPublicCourses: batch-join a set of courses' instructors in
+// one round trip, plus their display initials.
 function initialsFor(name: string): string {
   return name
     .split(" ")
@@ -115,82 +115,6 @@ export async function listPublicCourses(): Promise<{
   );
 
   return { success: true, courses };
-}
-
-export interface LandingPreviewCourse {
-  id: string;
-  name: string;
-  description: string;
-  languageTag: string;
-  enrolledCount: number;
-  instructorName: string;
-  href: string;
-}
-
-export interface LandingInstructorCard {
-  name: string;
-  initial: string;
-  title: string;
-}
-
-export interface LandingPageData {
-  previewCourses: LandingPreviewCourse[];
-  languageChips: string[];
-  instructorCards: LandingInstructorCard[];
-  stats: { courseCount: number; studentCount: number };
-}
-
-// Powered the marketing landing page that used to render at "/" (now the
-// course catalog — see app/page.tsx). Currently unused: kept for the
-// archived component at app/_components/archived/LandingClient.tsx in case
-// that page comes back. Deliberately unauthenticated, same rationale as
-// listPublicCourses above. studentCount is a sum of per-course enrollment
-// counts, not a distinct-student count — a student enrolled in two public
-// courses is counted twice, an acceptable approximation for a marketing stat.
-export async function getLandingPageData(): Promise<{
-  success: true;
-  data: LandingPageData;
-}> {
-  const publicCourses = await coursesRepo.listPublicActiveCourses();
-
-  const sorted = [...publicCourses].sort((a, b) => {
-    const at = a.data.createdAt.getTime();
-    const bt = b.data.createdAt.getTime();
-    return bt - at;
-  });
-
-  const [enrolledCounts, instructors] = await Promise.all([
-    Promise.all(sorted.map(({ id }) => enrollmentsRepo.countEnrollments(id))),
-    getInstructorsFor(sorted),
-  ]);
-
-  const previewCourses: LandingPreviewCourse[] = sorted.slice(0, 4).map((c, i) => ({
-    id: c.id,
-    name: c.data.name,
-    description: c.data.description,
-    languageTag: c.data.languageTag,
-    enrolledCount: enrolledCounts[i],
-    instructorName: instructors.get(c.data.instructorId)?.name ?? "",
-    href: `/courses/${c.id}`,
-  }));
-
-  const languageChips = [...new Set(sorted.map((c) => c.data.languageTag))];
-
-  const instructorCards: LandingInstructorCard[] = [...instructors.values()].map((u) => ({
-    name: u.name,
-    initial: initialsFor(u.name),
-    title: "Instructor",
-  }));
-
-  const stats = {
-    courseCount: sorted.length,
-    studentCount: enrolledCounts.reduce((sum, n) => sum + n, 0),
-  };
-
-  return {
-    success: true,
-    data: { previewCourses, languageChips, instructorCards, stats },
-  };
 }
 
 export interface PublicCourseDetail {
