@@ -1,13 +1,18 @@
 "use server";
 
-import type { ChallengeDifficulty } from "@/lib/types";
+import type { SubmissionAiFeedback } from "@/lib/types";
 import { recordStreakActivity } from "@/lib/actions/streak";
 import { triggerJournalEntry } from "@/lib/actions/journal";
 import { getUid } from "@/lib/auth/session";
 import { getCourse } from "@/lib/repositories/courses";
 import { getChallenge, getScheduledChallenge } from "@/lib/repositories/challenges";
-import { findSubmissionForChallenge, upsertSubmission } from "@/lib/repositories/submissions";
+import {
+  findSubmissionForChallenge,
+  setSubmissionFeedback,
+  upsertSubmission,
+} from "@/lib/repositories/submissions";
 import { getStartOfDayUTC } from "@/lib/domain/time";
+import { generateSubmissionFeedback } from "@/lib/services/openai/submissionFeedback";
 
 export async function getTodayChallenge(courseId: string) {
   const uid = await getUid();
@@ -28,6 +33,7 @@ export async function getTodayChallenge(courseId: string) {
       challenge: null,
       alreadySubmitted: false,
       submittedCode: null,
+      feedback: null,
     };
   }
 
@@ -47,6 +53,13 @@ export async function getTodayChallenge(courseId: string) {
     },
     alreadySubmitted: submission !== null,
     submittedCode: submission?.data.code ?? null,
+    feedback: submission?.data.aiVerdict
+      ? {
+          verdict: submission.data.aiVerdict,
+          celebrate: submission.data.aiCelebrate ?? "",
+          improve: submission.data.aiImprove ?? "",
+        }
+      : null,
   };
 }
 
@@ -58,24 +71,38 @@ export async function submitChallenge(
   const uid = await getUid();
   if (!uid) return { success: false as const, error: "unauthenticated" as const };
 
+  const challenge = await getChallenge(courseId, challengeId);
+  if (!challenge) return { success: false as const, error: "challenge_not_found" as const };
+
   await upsertSubmission(uid, courseId, challengeId, code);
 
+  // Fires unconditionally, not gated on the AI verdict computed below.
   recordStreakActivity({ studentId: uid, courseId, source: "challenge" }).catch(
     (err) => console.error("[streak] recordStreakActivity failed:", err)
   );
 
-  getChallenge(courseId, challengeId)
-    .then((challenge) => {
-      if (!challenge) return;
-      return triggerJournalEntry(uid, courseId, {
-        triggerType: "CHALLENGE",
-        title: challenge.title,
-        difficulty: challenge.difficulty,
-        topicTag: challenge.topicTag,
-        code,
-      });
-    })
-    .catch((err) => console.error("[journal] triggerJournalEntry failed:", err));
+  let feedback: SubmissionAiFeedback;
+  try {
+    feedback = await generateSubmissionFeedback({
+      title: challenge.title,
+      description: challenge.description,
+      difficulty: challenge.difficulty,
+      topicTag: challenge.topicTag,
+      code,
+    });
+  } catch (err) {
+    console.error("[ai] generateSubmissionFeedback failed:", err);
+    feedback = { verdict: "UNABLE_TO_ASSESS", celebrate: "", improve: "" };
+  }
+  await setSubmissionFeedback(uid, courseId, challengeId, feedback);
 
-  return { success: true as const };
+  triggerJournalEntry(uid, courseId, {
+    triggerType: "CHALLENGE",
+    title: challenge.title,
+    difficulty: challenge.difficulty,
+    topicTag: challenge.topicTag,
+    code,
+  }).catch((err) => console.error("[journal] triggerJournalEntry failed:", err));
+
+  return { success: true as const, feedback };
 }

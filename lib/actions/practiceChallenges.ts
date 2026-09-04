@@ -1,6 +1,6 @@
 "use server";
 
-import type { ChallengeDifficulty, ChallengeDoc } from "@/lib/types";
+import type { ChallengeDifficulty, ChallengeDoc, SubmissionAiFeedback } from "@/lib/types";
 import { recordStreakActivity } from "./streak";
 import { getUid } from "@/lib/auth/session";
 import { getCourse } from "@/lib/repositories/courses";
@@ -10,9 +10,14 @@ import {
   listArchivedDailyChallengesPage as fetchDailyArchivePage,
   type BrowsableChallengeOrigin,
 } from "@/lib/repositories/challenges";
-import { createAttempt } from "@/lib/repositories/challengeAttempts";
+import {
+  createAttempt,
+  findLatestAttempt,
+  setAttemptFeedback,
+} from "@/lib/repositories/challengeAttempts";
 import { getStartOfDayUTC } from "@/lib/domain/time";
 import { isChallengeBrowsable } from "@/lib/domain/visibility";
+import { generateSubmissionFeedback } from "@/lib/services/openai/submissionFeedback";
 import {
   mergePracticePage,
   INITIAL_PRACTICE_CURSOR,
@@ -141,7 +146,12 @@ export async function getPracticeChallenge(
   courseId: string,
   challengeId: string
 ): Promise<
-  { success: true; challenge: PracticeChallengeDetail | null } | { success: false; error: string }
+  | {
+      success: true;
+      challenge: PracticeChallengeDetail | null;
+      feedback: SubmissionAiFeedback | null;
+    }
+  | { success: false; error: string }
 > {
   const uid = await getUid();
   if (!uid) return { success: false, error: "unauthenticated" };
@@ -153,8 +163,10 @@ export async function getPracticeChallenge(
   const cutoff = getStartOfDayUTC(course.timezone);
 
   if (!data || !isChallengeBrowsable(data, cutoff)) {
-    return { success: true, challenge: null };
+    return { success: true, challenge: null, feedback: null };
   }
+
+  const latestAttempt = await findLatestAttempt(uid, courseId, challengeId);
 
   return {
     success: true,
@@ -166,6 +178,13 @@ export async function getPracticeChallenge(
       topicTag: data.topicTag,
       starterCode: data.starterCode,
     },
+    feedback: latestAttempt?.data.aiVerdict
+      ? {
+          verdict: latestAttempt.data.aiVerdict,
+          celebrate: latestAttempt.data.aiCelebrate ?? "",
+          improve: latestAttempt.data.aiImprove ?? "",
+        }
+      : null,
   };
 }
 
@@ -173,7 +192,9 @@ export async function submitPracticeAttempt(
   courseId: string,
   challengeId: string,
   code: string
-): Promise<{ success: true } | { success: false; error: string }> {
+): Promise<
+  { success: true; feedback: SubmissionAiFeedback } | { success: false; error: string }
+> {
   const uid = await getUid();
   if (!uid) return { success: false, error: "unauthenticated" };
 
@@ -186,13 +207,29 @@ export async function submitPracticeAttempt(
     return { success: false, error: "challenge_not_found" };
   }
 
-  await createAttempt(uid, courseId, challengeId, code);
+  const attemptId = await createAttempt(uid, courseId, challengeId, code);
 
   // Practice shares the single streak counter with Daily Challenge/check-in/
   // sprint-card — same recordStreakActivity primitive, just a 4th source.
+  // Fires unconditionally, unaffected by the AI verdict computed below.
   recordStreakActivity({ studentId: uid, courseId, source: "practice" }).catch((err) =>
     console.error("[streak] recordStreakActivity failed:", err)
   );
 
-  return { success: true };
+  let feedback: SubmissionAiFeedback;
+  try {
+    feedback = await generateSubmissionFeedback({
+      title: data.title,
+      description: data.description,
+      difficulty: data.difficulty,
+      topicTag: data.topicTag,
+      code,
+    });
+  } catch (err) {
+    console.error("[ai] generateSubmissionFeedback failed:", err);
+    feedback = { verdict: "UNABLE_TO_ASSESS", celebrate: "", improve: "" };
+  }
+  await setAttemptFeedback(attemptId, feedback);
+
+  return { success: true, feedback };
 }

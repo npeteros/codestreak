@@ -43,6 +43,7 @@ export default async function PracticeChallengeDetailPage({
       courseId={courseId}
       challengeId={challengeId}
       challenge={result.success ? result.challenge : null}
+      initialFeedback={result.success ? result.feedback : null}
     />
   );
 }

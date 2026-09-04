@@ -20,3 +20,17 @@ export function isChallengeBrowsable(data: ChallengeDoc, cutoff: Date): boolean 
   if (data.kind === "PRACTICE") return true;
   return data.scheduledFor !== undefined && data.scheduledFor < cutoff;
 }
+
+// True for the one DAILY challenge scheduled inside [startOfDay, endOfDay) —
+// i.e. today's still-exclusive Daily Challenge, which isChallengeBrowsable()
+// deliberately excludes. Features that legitimately operate on today's Daily
+// Challenge (hints, submission feedback) need both checks combined.
+export function isTodaysDailyChallenge(data: ChallengeDoc, startOfDay: Date, endOfDay: Date): boolean {
+  return (
+    data.kind === "DAILY" &&
+    !data.isDraft &&
+    data.scheduledFor !== undefined &&
+    data.scheduledFor >= startOfDay &&
+    data.scheduledFor < endOfDay
+  );
+}

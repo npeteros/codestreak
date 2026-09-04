@@ -24,6 +24,7 @@ jobs:
             git reset --hard && git clean -fd && git pull origin main
             npm install --build-from-source
             npm rebuild
+            npm run db:migrate
             pm2 stop codestreak || true
             npm run build
             pm2 reload codestreak

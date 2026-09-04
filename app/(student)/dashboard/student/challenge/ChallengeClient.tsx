@@ -4,6 +4,9 @@ import { useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { submitChallenge } from "@/lib/actions/challenges";
 import { ChallengeView } from "@/components/challenges/ChallengeView";
+import { HintChat } from "@/components/challenges/HintChat";
+import { SubmissionFeedbackCard } from "@/components/challenges/SubmissionFeedbackCard";
+import type { SubmissionAiFeedback } from "@/lib/types";
 
 interface Challenge {
   id: string;
@@ -19,6 +22,7 @@ interface Props {
   challenge: Challenge | null;
   alreadySubmitted: boolean;
   submittedCode: string | null;
+  initialFeedback: SubmissionAiFeedback | null;
 }
 
 export function ChallengeClient({
@@ -26,6 +30,7 @@ export function ChallengeClient({
   challenge,
   alreadySubmitted,
   submittedCode,
+  initialFeedback,
 }: Props) {
   const [code, setCode] = useState(
     submittedCode ?? challenge?.starterCode ?? ""
@@ -36,6 +41,7 @@ export function ChallengeClient({
   const [submitted, setSubmitted] = useState(alreadySubmitted);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<SubmissionAiFeedback | null>(initialFeedback);
 
   if (!challenge) {
     return (
@@ -65,6 +71,7 @@ export function ChallengeClient({
     if (result.success) {
       setSubmitted(true);
       setSavedCode(code);
+      setFeedback(result.feedback);
     } else {
       setError("Something went wrong. Try again.");
     }
@@ -85,12 +92,15 @@ export function ChallengeClient({
 
       {/* Content */}
       <div className="flex gap-4 flex-wrap items-stretch">
-        <ChallengeView
-          title={challenge.title}
-          difficulty={challenge.difficulty}
-          topicTag={challenge.topicTag}
-          description={challenge.description}
-        />
+        <div className="flex-[1_1_300px] min-w-[280px] flex flex-col gap-4">
+          <ChallengeView
+            title={challenge.title}
+            difficulty={challenge.difficulty}
+            topicTag={challenge.topicTag}
+            description={challenge.description}
+          />
+          <HintChat courseId={courseId} challengeId={challenge.id} draftCode={code} />
+        </div>
 
         {/* Editor */}
         <div className="flex-[1.3_1_340px] min-w-[300px] flex flex-col border border-white/[0.08] rounded-[15px] overflow-hidden bg-code-bg">
@@ -158,6 +168,14 @@ export function ChallengeClient({
           </div>
         </div>
       </div>
+
+      {feedback && (
+        <SubmissionFeedbackCard
+          verdict={feedback.verdict}
+          celebrate={feedback.celebrate}
+          improve={feedback.improve}
+        />
+      )}
     </div>
   );
 }

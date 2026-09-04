@@ -54,6 +54,7 @@ export default async function StudentChallengePage({
       challenge={result.challenge ?? null}
       alreadySubmitted={result.alreadySubmitted}
       submittedCode={result.submittedCode ?? null}
+      initialFeedback={result.feedback ?? null}
     />
   );
 }

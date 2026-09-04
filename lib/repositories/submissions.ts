@@ -1,9 +1,34 @@
 import { Op } from "sequelize";
 import { ChallengeSubmission } from "@/lib/db/models";
-import type { ChallengeSubmissionDoc } from "@/lib/types";
+import type { ChallengeSubmissionDoc, SubmissionAiFeedback } from "@/lib/types";
 
 function toDoc(row: ChallengeSubmission): ChallengeSubmissionDoc {
-  return { challengeId: row.challengeId, code: row.code, submittedAt: row.submittedAt };
+  return {
+    challengeId: row.challengeId,
+    code: row.code,
+    submittedAt: row.submittedAt,
+    aiVerdict: row.aiVerdict,
+    aiCelebrate: row.aiCelebrate,
+    aiImprove: row.aiImprove,
+    aiFeedbackAt: row.aiFeedbackAt,
+  };
+}
+
+export async function setSubmissionFeedback(
+  studentId: string,
+  courseId: string,
+  challengeId: string,
+  feedback: SubmissionAiFeedback
+): Promise<void> {
+  await ChallengeSubmission.update(
+    {
+      aiVerdict: feedback.verdict,
+      aiCelebrate: feedback.celebrate,
+      aiImprove: feedback.improve,
+      aiFeedbackAt: new Date(),
+    },
+    { where: { studentId, courseId, challengeId } }
+  );
 }
 
 export async function findSubmissionForChallenge(

@@ -6,18 +6,28 @@ import { CheckCircle2 } from "lucide-react";
 import { submitPracticeAttempt } from "@/lib/actions/practiceChallenges";
 import type { PracticeChallengeDetail } from "@/lib/actions/practiceChallenges";
 import { ChallengeView } from "@/components/challenges/ChallengeView";
+import { HintChat } from "@/components/challenges/HintChat";
+import { SubmissionFeedbackCard } from "@/components/challenges/SubmissionFeedbackCard";
+import type { SubmissionAiFeedback } from "@/lib/types";
 
 interface Props {
   courseId: string;
   challengeId: string;
   challenge: PracticeChallengeDetail | null;
+  initialFeedback: SubmissionAiFeedback | null;
 }
 
-export function PracticeChallengeClient({ courseId, challengeId, challenge }: Props) {
+export function PracticeChallengeClient({
+  courseId,
+  challengeId,
+  challenge,
+  initialFeedback,
+}: Props) {
   const [code, setCode] = useState(challenge?.starterCode ?? "");
   const [submitting, setSubmitting] = useState(false);
   const [justLogged, setJustLogged] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<SubmissionAiFeedback | null>(initialFeedback);
 
   if (!challenge) {
     return (
@@ -50,6 +60,7 @@ export function PracticeChallengeClient({ courseId, challengeId, challenge }: Pr
     const result = await submitPracticeAttempt(courseId, challengeId, code);
     if (result.success) {
       setJustLogged(true);
+      setFeedback(result.feedback);
     } else {
       setError("Something went wrong. Try again.");
     }
@@ -68,12 +79,15 @@ export function PracticeChallengeClient({ courseId, challengeId, challenge }: Pr
       </div>
 
       <div className="flex gap-4 flex-wrap items-stretch">
-        <ChallengeView
-          title={challenge.title}
-          difficulty={challenge.difficulty}
-          topicTag={challenge.topicTag}
-          description={challenge.description}
-        />
+        <div className="flex-[1_1_300px] min-w-[280px] flex flex-col gap-4">
+          <ChallengeView
+            title={challenge.title}
+            difficulty={challenge.difficulty}
+            topicTag={challenge.topicTag}
+            description={challenge.description}
+          />
+          <HintChat courseId={courseId} challengeId={challengeId} draftCode={code} />
+        </div>
 
         <div className="flex-[1.3_1_340px] min-w-[300px] flex flex-col border border-white/[0.08] rounded-[15px] overflow-hidden bg-code-bg">
           <div className="flex items-center justify-between px-[15px] py-[11px] bg-[#131316] border-b border-white/[0.07]">
@@ -118,6 +132,14 @@ export function PracticeChallengeClient({ courseId, challengeId, challenge }: Pr
           </div>
         </div>
       </div>
+
+      {feedback && (
+        <SubmissionFeedbackCard
+          verdict={feedback.verdict}
+          celebrate={feedback.celebrate}
+          improve={feedback.improve}
+        />
+      )}
     </div>
   );
 }

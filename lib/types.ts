@@ -6,6 +6,9 @@ export type ChallengeDifficulty = "EASY" | "MEDIUM" | "HARD";
 export type ChallengeKind = "DAILY" | "PRACTICE";
 export type SprintCardStatus = "TODO" | "IN_PROGRESS" | "DONE";
 export type JournalTriggerType = "CHALLENGE" | "CHECKIN" | "SPRINT_CARD";
+export type SubmissionVerdict = "CORRECT" | "PARTIALLY_CORRECT" | "INCORRECT" | "UNABLE_TO_ASSESS";
+export type HintChatRole = "user" | "assistant";
+export type HintStyle = "socratic" | "direct";
 export type ProjectScope = "ALL_STUDENTS" | "STUDENTS";
 export type SprintTaskStatus = "TODO" | "IN_PROGRESS" | "IN_REVIEW" | "DONE";
 
@@ -50,10 +53,35 @@ export interface ChallengeDoc {
   createdAt: Date;
 }
 
+export interface SubmissionAiFeedback {
+  verdict: SubmissionVerdict;
+  celebrate: string;
+  improve: string;
+}
+
+export interface HintChatMessage {
+  role: HintChatRole;
+  content: string;
+}
+
 export interface ChallengeSubmissionDoc {
   challengeId: string;
   code: string;
   submittedAt: Date;
+  aiVerdict: SubmissionVerdict | null;
+  aiCelebrate: string | null;
+  aiImprove: string | null;
+  aiFeedbackAt: Date | null;
+}
+
+export interface ChallengeAttemptDoc {
+  challengeId: string;
+  code: string;
+  submittedAt: Date;
+  aiVerdict: SubmissionVerdict | null;
+  aiCelebrate: string | null;
+  aiImprove: string | null;
+  aiFeedbackAt: Date | null;
 }
 
 export interface CheckInDoc {
