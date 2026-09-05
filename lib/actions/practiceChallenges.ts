@@ -140,6 +140,7 @@ export interface PracticeChallengeDetail {
   difficulty: ChallengeDifficulty;
   topicTag: string;
   starterCode: string;
+  languageTag: string;
 }
 
 export async function getPracticeChallenge(
@@ -177,6 +178,7 @@ export async function getPracticeChallenge(
       difficulty: data.difficulty,
       topicTag: data.topicTag,
       starterCode: data.starterCode,
+      languageTag: course.languageTag,
     },
     feedback: latestAttempt?.data.aiVerdict
       ? {

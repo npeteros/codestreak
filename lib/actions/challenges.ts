@@ -20,7 +20,7 @@ export async function getTodayChallenge(courseId: string) {
 
   const course = await getCourse(courseId);
   if (!course) return { success: false as const, error: "course_not_found" as const };
-  const { timezone } = course;
+  const { timezone, languageTag } = course;
 
   const startOfDay = getStartOfDayUTC(timezone);
   const endOfDay = new Date(startOfDay.getTime() + 24 * 60 * 60 * 1000);
@@ -50,6 +50,7 @@ export async function getTodayChallenge(courseId: string) {
       difficulty: data.difficulty,
       topicTag: data.topicTag,
       starterCode: data.starterCode,
+      languageTag,
     },
     alreadySubmitted: submission !== null,
     submittedCode: submission?.data.code ?? null,

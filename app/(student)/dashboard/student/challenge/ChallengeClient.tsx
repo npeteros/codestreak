@@ -4,8 +4,13 @@ import { useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import { submitChallenge } from "@/lib/actions/challenges";
 import { ChallengeView } from "@/components/challenges/ChallengeView";
+import { CodeEditor } from "@/components/challenges/CodeEditor";
+import { EditorThemePicker } from "@/components/challenges/EditorThemePicker";
+import { LanguagePicker } from "@/components/challenges/LanguagePicker";
+import { normalizeLanguageTag } from "@/components/challenges/editorLanguages";
 import { HintChat } from "@/components/challenges/HintChat";
 import { SubmissionFeedbackCard } from "@/components/challenges/SubmissionFeedbackCard";
+import { useEditorTheme } from "@/lib/hooks/useEditorTheme";
 import type { SubmissionAiFeedback } from "@/lib/types";
 
 interface Challenge {
@@ -15,6 +20,7 @@ interface Challenge {
   difficulty: "EASY" | "MEDIUM" | "HARD";
   topicTag: string;
   starterCode: string;
+  languageTag: string;
 }
 
 interface Props {
@@ -41,6 +47,8 @@ export function ChallengeClient({
   const [submitted, setSubmitted] = useState(alreadySubmitted);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { themeKey, setThemeKey } = useEditorTheme();
+  const [language, setLanguage] = useState(() => normalizeLanguageTag(challenge?.languageTag));
   const [feedback, setFeedback] = useState<SubmissionAiFeedback | null>(initialFeedback);
 
   if (!challenge) {
@@ -112,14 +120,18 @@ export function ChallengeClient({
                 solution
               </span>
             </div>
+            <div className="flex items-center gap-2">
+              <LanguagePicker value={language} onChange={setLanguage} />
+              <EditorThemePicker value={themeKey} onChange={setThemeKey} />
+            </div>
           </div>
 
-          {/* Code textarea */}
-          <textarea
+          {/* Code editor */}
+          <CodeEditor
             value={code}
-            onChange={(e) => setCode(e.target.value)}
-            spellCheck={false}
-            className="flex-1 min-h-[230px] w-full resize-y border-none outline-none bg-code-bg text-[#EDEBE4] font-mono text-[13px] leading-[1.75] px-[18px] py-[16px]"
+            onChange={setCode}
+            languageTag={language}
+            themeKey={themeKey}
           />
 
           {/* Footer */}

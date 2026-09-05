@@ -11,6 +11,11 @@ import {
 } from "@/lib/actions/instructor";
 import type { AiChallengeDraft } from "@/lib/services/openai/challengeGeneration";
 import { useToast } from "@/lib/hooks/useToast";
+import { CodeEditor } from "@/components/challenges/CodeEditor";
+import { EditorThemePicker } from "@/components/challenges/EditorThemePicker";
+import { LanguagePicker } from "@/components/challenges/LanguagePicker";
+import { normalizeLanguageTag } from "@/components/challenges/editorLanguages";
+import { useEditorTheme } from "@/lib/hooks/useEditorTheme";
 
 type Mode = "manual" | "ai";
 type Difficulty = "EASY" | "MEDIUM" | "HARD";
@@ -96,6 +101,9 @@ export function PracticeChallengeFormClient({ courseId, languageTag, initialChal
   const [difficulty, setDifficulty] = useState<Difficulty>(initialChallenge?.difficulty ?? "MEDIUM");
   const [topicTag, setTopicTag] = useState(initialChallenge?.topicTag ?? "");
   const [starterCode, setStarterCode] = useState(initialChallenge?.starterCode ?? lang.starter);
+  const { themeKey, setThemeKey } = useEditorTheme();
+  const [language, setLanguage] = useState(() => normalizeLanguageTag(languageTag));
+  const pickedLang = languageMeta(language);
 
   const [aiTopic, setAiTopic] = useState("");
   const [aiDrafts, setAiDrafts] = useState<(AiChallengeDraft & { selected: boolean })[]>([]);
@@ -314,18 +322,19 @@ export function PracticeChallengeFormClient({ courseId, languageTag, initialChal
               <div className="flex items-center gap-2.5">
                 <span className="w-[9px] h-[9px] rounded-full bg-gold inline-block" />
                 <span className="font-mono text-[12.5px] text-[#D7D5CE]">
-                  starter.{lang.ext}
+                  starter.{pickedLang.ext}
                 </span>
               </div>
-              <span className="font-mono text-[11px] text-text-muted border border-white/10 rounded-[6px] px-2 py-[3px]">
-                {lang.label}
-              </span>
+              <div className="flex items-center gap-2">
+                <LanguagePicker value={language} onChange={setLanguage} />
+                <EditorThemePicker value={themeKey} onChange={setThemeKey} />
+              </div>
             </div>
-            <textarea
+            <CodeEditor
               value={starterCode}
-              onChange={(e) => setStarterCode(e.target.value)}
-              spellCheck={false}
-              className="flex-1 min-h-[240px] w-full resize-y border-none outline-none bg-code-bg text-text-primary font-mono text-[13px] leading-[1.75] px-[18px] py-[16px]"
+              onChange={setStarterCode}
+              languageTag={language}
+              themeKey={themeKey}
             />
           </div>
         </div>
@@ -554,17 +563,23 @@ export function PracticeChallengeFormClient({ courseId, languageTag, initialChal
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
-                STARTER CODE
-              </label>
-              <textarea
-                value={editingDraft.starter}
-                onChange={(e) =>
-                  setEditingDraft((d) => (d ? { ...d, starter: e.target.value } : d))
-                }
-                spellCheck={false}
-                className="min-h-[140px] resize-y bg-code-bg text-text-primary border border-white/10 rounded-[10px] px-[15px] py-[13px] font-mono text-[13px] leading-[1.65] outline-none"
-              />
+              <div className="flex items-center justify-between">
+                <label className="font-mono text-[11px] tracking-[.08em] text-text-muted">
+                  STARTER CODE
+                </label>
+                <LanguagePicker value={language} onChange={setLanguage} />
+              </div>
+              <div className="border border-white/10 rounded-[10px] overflow-hidden">
+                <CodeEditor
+                  value={editingDraft.starter}
+                  onChange={(value) =>
+                    setEditingDraft((d) => (d ? { ...d, starter: value } : d))
+                  }
+                  languageTag={language}
+                  themeKey={themeKey}
+                  height="140px"
+                />
+              </div>
             </div>
 
             <div className="flex justify-end gap-2.5 pt-1">

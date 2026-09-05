@@ -6,8 +6,13 @@ import { CheckCircle2 } from "lucide-react";
 import { submitPracticeAttempt } from "@/lib/actions/practiceChallenges";
 import type { PracticeChallengeDetail } from "@/lib/actions/practiceChallenges";
 import { ChallengeView } from "@/components/challenges/ChallengeView";
+import { CodeEditor } from "@/components/challenges/CodeEditor";
+import { EditorThemePicker } from "@/components/challenges/EditorThemePicker";
+import { LanguagePicker } from "@/components/challenges/LanguagePicker";
+import { normalizeLanguageTag } from "@/components/challenges/editorLanguages";
 import { HintChat } from "@/components/challenges/HintChat";
 import { SubmissionFeedbackCard } from "@/components/challenges/SubmissionFeedbackCard";
+import { useEditorTheme } from "@/lib/hooks/useEditorTheme";
 import type { SubmissionAiFeedback } from "@/lib/types";
 
 interface Props {
@@ -28,6 +33,8 @@ export function PracticeChallengeClient({
   const [justLogged, setJustLogged] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<SubmissionAiFeedback | null>(initialFeedback);
+  const { themeKey, setThemeKey } = useEditorTheme();
+  const [language, setLanguage] = useState(() => normalizeLanguageTag(challenge?.languageTag));
 
   if (!challenge) {
     return (
@@ -95,16 +102,20 @@ export function PracticeChallengeClient({
               <span className="w-[9px] h-[9px] rounded-full bg-gold inline-block" />
               <span className="font-mono text-[12.5px] text-[#D7D5CE]">solution</span>
             </div>
+            <div className="flex items-center gap-2">
+              <LanguagePicker value={language} onChange={setLanguage} />
+              <EditorThemePicker value={themeKey} onChange={setThemeKey} />
+            </div>
           </div>
 
-          <textarea
+          <CodeEditor
             value={code}
-            onChange={(e) => {
-              setCode(e.target.value);
+            onChange={(value) => {
+              setCode(value);
               setJustLogged(false);
             }}
-            spellCheck={false}
-            className="flex-1 min-h-[230px] w-full resize-y border-none outline-none bg-code-bg text-[#EDEBE4] font-mono text-[13px] leading-[1.75] px-[18px] py-[16px]"
+            languageTag={language}
+            themeKey={themeKey}
           />
 
           <div className="flex items-center justify-between gap-3 px-[15px] py-[13px] border-t border-white/[0.07] bg-[#131316] flex-wrap">
